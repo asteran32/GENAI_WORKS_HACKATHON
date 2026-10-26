@@ -13,7 +13,17 @@ export class CityScene {
     this.scene.add(new T.HemisphereLight('#d8e9f4', '#5c6b5e', 2));
     this.sun = new T.DirectionalLight('#fff4d9', 3); this.sun.castShadow = true; this.sun.shadow.mapSize.set(2048, 2048); Object.assign(this.sun.shadow.camera, { left: -2200, right: 2200, top: 2200, bottom: -2200, near: 1, far: 6500 }); this.sun.shadow.bias = -.00015; this.sun.shadow.normalBias = .3; this.scene.add(this.sun); this.scene.add(this.sun.target);
     const ground = new T.Mesh(new T.PlaneGeometry(6500, 6500), new T.MeshStandardMaterial({ color: '#73807b', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; this.scene.add(ground);
-    this.buildings = new T.Group(); this.ground = new T.Group(); this.samples = new T.Group(); this.scene.add(this.ground, this.buildings, this.samples);
+    this.buildings = new T.Group(); this.ground = new T.Group(); this.samples = new T.Group(); this.walk = new T.Group(); this.trees = new T.Group(); this.sites = new T.Group(); this.routes = new T.Group(); this.scene.add(this.ground, this.buildings, this.samples, this.walk, this.trees, this.sites, this.routes);
+    let down = null;
+    this.renderer.domElement.addEventListener('pointerdown', event => { down = [event.clientX, event.clientY]; });
+    this.renderer.domElement.addEventListener('pointerup', event => {
+      if (!down || Math.hypot(event.clientX-down[0], event.clientY-down[1]) > 5 || !this.onMapClick || !this.area) return;
+      const rect = this.renderer.domElement.getBoundingClientRect(), mouse = new T.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2);
+      const ray = new T.Raycaster(); ray.setFromCamera(mouse,this.camera); const hit = new T.Vector3();
+      if (!ray.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),0),hit)) return;
+      const lon = this.area.longitude + hit.x/(RAD*R*Math.cos(this.area.latitude*RAD)), lat = this.area.latitude-hit.z/(RAD*R);
+      if (lon>=this.area.west && lon<=this.area.east && lat>=this.area.south && lat<=this.area.north) this.onMapClick([lon,lat]);
+    });
     this.observer = new ResizeObserver(() => { const w = element.clientWidth, h = element.clientHeight; if (!w || !h) return; this.renderer.setSize(w, h); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }); this.observer.observe(element);
     this.renderer.setAnimationLoop(() => { this.controls.update(); this.renderer.render(this.scene, this.camera); });
   }
@@ -61,6 +71,33 @@ export class CityScene {
       const m = new T.MeshBasicMaterial({ color: '#42d1b6', transparent: true, opacity: .55, depthWrite: false });
       const mesh = new T.InstancedMesh(g, m, run.cells.length), matrix = new T.Matrix4();
       run.cells.forEach(([x,y], i) => { matrix.makeTranslation(x, .8, -y); mesh.setMatrixAt(i, matrix); }); mesh.instanceMatrix.needsUpdate = true; this.samples.add(mesh);
+    }
+  }
+  setCBDLayers(data) {
+    for (const group of [this.walk,this.trees,this.sites,this.routes]) this.clear(group);
+    const vertices=[];
+    for (const edge of data.walk_edges) for (const point of edge.geometry.coordinates) { const [x,y]=this.project(point); vertices.push(x,1.5,-y); }
+    if (vertices.length) { const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));this.walk.add(new T.LineSegments(geometry,new T.LineBasicMaterial({color:'#64a9ba',transparent:true,opacity:.75}))); }
+    const markers=(rows,group,color,radius)=>{
+      if(!rows.length)return;
+      const geometry=new T.SphereGeometry(radius,6,4),material=new T.MeshBasicMaterial({color}),mesh=new T.InstancedMesh(geometry,material,rows.length),matrix=new T.Matrix4();
+      rows.forEach((row,i)=>{const [x,y]=this.project([row.lon,row.lat]);matrix.makeTranslation(x,radius,-y);mesh.setMatrixAt(i,matrix);});mesh.instanceMatrix.needsUpdate=true;group.add(mesh);
+    };
+    markers(data.trees,this.trees,'#90cf83',2.5);markers(data.pedestrian_sites,this.sites,'#f6b266',6);
+  }
+  setRoutes(result) {
+    this.clear(this.routes);
+    for (const [route,color,height,width] of [[result.fastest,'#f3c578',7,6],[result.lower_exposure,'#69e8d1',8,3]]) {
+      const positions=[];
+      for(let i=1;i<route.coordinates.length;i++) {
+        const a=this.project(route.coordinates[i-1]),b=this.project(route.coordinates[i]),dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);if(!length)continue;
+        const nx=-dy/length*width/2,ny=dx/length*width/2;
+        const p=[a[0]+nx,height,-a[1]-ny],q=[a[0]-nx,height,-a[1]+ny],r=[b[0]+nx,height,-b[1]-ny],s=[b[0]-nx,height,-b[1]+ny];
+        positions.push(...p,...q,...r,...q,...s,...r);
+      }
+      if(!positions.length)continue;
+      const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();
+      const mesh=new T.Mesh(geometry,new T.MeshBasicMaterial({color,side:T.DoubleSide,depthTest:false,depthWrite:false,transparent:true,opacity:.95}));mesh.renderOrder=10;this.routes.add(mesh);
     }
   }
 }
