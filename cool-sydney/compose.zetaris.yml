@@ -1,0 +1,8 @@
+# Use after zetaris-platform/docker-compose.yml. Relative paths resolve from it.
+services:
+  driver:
+    volumes:
+      - ../data/cool-sydney/processed:/home/zetaris/customer-data/shared/cool-sydney:ro
+  api:
+    volumes:
+      - ../data/cool-sydney/processed:/home/zetaris/customer-data/shared/cool-sydney:ro

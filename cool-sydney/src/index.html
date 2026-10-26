@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101a22"><title>Cool Sydney — 도시 그늘 실험실</title>
+  <meta name="description" content="시간별 도시 그늘과 냉방 시설 접근성을 계산하고, 같은 예산의 시설 배치를 비교하는 로컬 시뮬레이션.">
+  <style>/* APP_STYLES */</style>
+</head>
+<body>
+<a class="skip-link" href="#controls">시뮬레이션 설정으로 이동</a>
+<header class="header">
+  <a class="brand" href="#"><span class="brand-icon" aria-hidden="true">✳</span><span>COOL<span class="brand-light">SYDNEY</span><small>URBAN SHADE LAB</small></span></a>
+  <nav aria-label="주 메뉴"><a href="#workspace" class="active">도시 시뮬레이션</a><a href="#comparison">대안 비교</a><a href="#data-section">데이터 · 연결</a></nav>
+  <div class="header-actions"><span id="runtime" class="runtime"><i></i>브라우저 계산</span><button id="export" class="button small" disabled>결과 내보내기 <span aria-hidden="true">↗</span></button></div>
+</header>
+<main>
+  <div class="page-title"><div><div class="eyebrow">GREATER SYDNEY / SCENARIO EXPLORER</div><h1>그늘을 읽고, <span>접근성을 설계하다.</span></h1><p>같은 예산으로 더 많은 사람이 냉방 공간에 도착할 수 있도록.</p></div><div class="area-tag"><span class="location-dot"></span><div>Parramatta 좌표<small>1.28 × 0.96 km · 합성 시연 구역</small></div></div></div>
+  <div class="notice"><span class="sample-pill">SYNTHETIC DATA</span><span>건물·나무·시설·인구는 재현 가능한 합성 표본입니다. 실제 NSW 시설 배치나 기온 예측 결과가 아닙니다.</span><a href="#data-section">데이터 확인 <span aria-hidden="true">↗</span></a></div>
+  <section id="workspace" class="workspace" aria-label="도시 시뮬레이터">
+    <aside class="control-panel" id="controls">
+      <div class="panel-heading"><span class="eyebrow">01 / SCENARIO</span><h2>실험 조건</h2><button id="reset" class="text-button">초기화 ↺</button></div>
+      <form id="scenario-form">
+        <label class="field-label" for="date">시뮬레이션 날짜</label><input id="date" type="date" value="2027-01-15" min="2020-01-01" max="2035-12-31" required>
+        <div class="field-heading"><label for="hour">시각</label><output id="hour-value" for="hour">14:00</output></div>
+        <input id="hour" type="range" min="8" max="18" step="0.25" value="14"><div class="range-labels"><span>08:00</span><span>Australia/Sydney</span><span>18:00</span></div>
+        <div class="sun-readout"><span aria-hidden="true">☀</span><span id="sun-info">태양 위치 계산 중</span></div>
+        <div class="divider"></div>
+        <div class="field-heading"><label for="budget">추가 운영 예산</label><output id="budget-value" for="budget">A$60,000</output></div>
+        <input id="budget" type="range" min="0" max="100000" step="2000" value="60000"><div class="range-labels"><span>A$0</span><span>시나리오당 가정 비용</span><span>100k</span></div>
+        <div class="field-row"><div><label class="field-label" for="max-facilities">추가 시설 수</label><select id="max-facilities"><option value="1">최대 1곳</option><option value="2">최대 2곳</option><option value="3" selected>최대 3곳</option><option value="4">최대 4곳</option><option value="5">최대 5곳</option></select></div><div><label class="field-label" for="walk-minutes">보행 한도</label><select id="walk-minutes"><option value="5">5분</option><option value="10">10분</option><option value="15" selected>15분</option><option value="20">20분</option></select></div></div>
+        <label class="field-label" for="speed">보행 속도 가정</label><select id="speed"><option value="0.7">느린 보행 · 0.7 m/s</option><option value="1" selected>기본 보행 · 1.0 m/s</option><option value="1.3">빠른 보행 · 1.3 m/s</option></select>
+        <label class="switch-row"><input type="checkbox" id="accessible" checked><span class="switch" aria-hidden="true"></span><span>계단 없는 경로·시설만</span></label>
+        <label class="switch-row"><input type="checkbox" id="extend"><span class="switch" aria-hidden="true"></span><span>기존 허브 20시까지 연장<small>추가 A$8,000 / 시나리오</small></span></label>
+        <div class="divider"></div>
+        <div class="field-heading"><span>검토할 시설 후보</span><small id="candidate-count">5곳</small></div><div id="candidate-list" class="candidate-list"></div>
+        <button id="run" class="run-button" type="submit"><span aria-hidden="true">▷</span> 시나리오 계산 <span aria-hidden="true">→</span></button>
+        <p id="run-state" class="run-state" role="status" aria-live="polite">계산 준비 중</p><p id="error" class="error" role="alert" hidden></p>
+      </form>
+    </aside>
+    <div class="map-panel">
+      <div class="map-header"><div><span class="eyebrow">02 / SHADE & ACCESS</span><h2>도시 그늘 지도 <span class="tiny-badge">가상 형상</span></h2></div><div class="view-switch" aria-label="지도 투영"><button data-view="iso" aria-pressed="true">입체</button><button data-view="top" aria-pressed="false">평면</button></div></div>
+      <div class="map-toolbar"><button class="layer active" data-layer="shadows" aria-pressed="true"><i class="legend-dot shade"></i>그늘</button><button class="layer active" data-layer="trees" aria-pressed="true"><i class="legend-dot tree"></i>나무</button><button class="layer active" data-layer="demand" aria-pressed="true"><i class="legend-dot demand"></i>미충족 수요</button><span class="map-coordinate">33.815° S &nbsp; 151.004° E</span></div>
+      <div class="map-stage" id="map-stage">
+        <svg id="city-map" viewBox="0 0 1200 850" role="img" aria-labelledby="map-title map-description"><title id="map-title">시간별 합성 도시 그늘과 냉방 시설 지도</title><desc id="map-description">가상 건물과 나무의 그림자, 선택된 냉방 시설, 합성 수요를 표시합니다. 후보 시설과 수요 점을 선택해 상세 내용을 볼 수 있습니다.</desc><defs><pattern id="map-grid" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#26343d"/></pattern><filter id="marker-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="5"/></filter><clipPath id="district-clip"><polygon id="district-clip-shape"/></clipPath></defs><rect width="1200" height="850" fill="url(#map-grid)"/><g id="map-world"></g></svg>
+        <div class="map-topline"><span class="map-mode" id="map-mode">CURRENT SCENARIO</span><span id="map-time">15 JAN 2027 / 14:00 AEDT</span></div>
+        <div id="map-detail" class="map-detail"><span class="detail-icon">⌖</span><div><strong>도시를 탐색하세요</strong><p>시설 마커는 후보 포함/제외, 수요 점은 보행 경로를 보여줍니다.</p></div></div>
+        <div class="map-tools"><button id="zoom-in" aria-label="지도 확대">+</button><button id="zoom-out" aria-label="지도 축소">−</button><button id="zoom-reset" aria-label="지도 배율 초기화">⌖</button></div>
+        <div class="map-north" aria-label="북쪽 방향"><span id="north-arrow">↗</span>N</div>
+        <div class="map-scale"><span></span>200 m · 모형 좌표</div>
+      </div>
+      <div class="map-footer"><div><span class="shade-swatch"></span><span>직사광 차폐 영역</span><span class="route-swatch"></span><span>선택한 보행 경로</span></div><span>그늘 ≠ 기온 감소량</span></div>
+      <div class="time-strip"><span>DAYLIGHT</span><div id="sun-chart" aria-label="하루 태양 고도 그래프"></div><button id="play" class="text-button" aria-pressed="false">▶ 시간 재생</button></div>
+    </div>
+    <aside class="result-panel">
+      <div class="panel-heading"><span class="eyebrow">03 / IMPACT</span><h2>접근성 변화</h2><span id="result-status" class="status-pill">계산 중</span></div>
+      <div class="hero-metric"><span>추가 수용 가능 인원</span><div><strong id="additional">—</strong><span>명</span></div><p>보행 한도 · 개방 시간 · 수용량 반영</p></div>
+      <div class="coverage"><div class="metric-label">전체 수요의 수용 비율<strong id="coverage-value">—</strong></div><div class="coverage-track"><div id="coverage-bar"></div><span id="baseline-marker"></span></div><div class="metric-note"><span id="baseline-coverage">기준안 —</span><span id="unmet-value">미충족 —</span></div></div>
+      <div class="mini-metrics"><div><span>우선 지원 집단 수용</span><strong id="priority-value">—</strong><small id="priority-change">—</small></div><div><span>추가 1인당 비용</span><strong id="per-person">—</strong><small>가정 비용 / 추가 인원</small></div><div><span>평균 보행 시간</span><strong id="walk-value">—</strong><small>수용된 인원 기준</small></div><div><span>직사광 노출 등가</span><strong id="exposure-value">—</strong><small>수관 투과율 반영 · 분</small></div></div>
+      <div class="shade-metric"><span class="sun-symbol">◐</span><div><strong id="shade-value">—</strong><span>분석 시각의 옥외 그늘 면적 비율</span></div></div>
+      <div class="recommendation"><div class="field-heading"><h3>계산된 시설 조합</h3><span id="selected-number">—곳</span></div><div id="selected-facilities"></div><div class="cost-line"><span>추가 비용 / 예산</span><strong id="total-cost">—</strong></div></div>
+      <div class="insight"><span class="eyebrow">CALCULATION NOTE</span><p id="insight">동일 조건의 기준안과 후보 조합을 비교합니다.</p><small>수용 인원을 우선하는 결정론적 계산 · AI 응답 아님</small></div>
+    </aside>
+  </section>
+  <section class="comparison section" id="comparison"><div class="section-heading"><div><span class="eyebrow">COMPARE / SAME INPUTS</span><h2>같은 예산, 다른 배치</h2><p>우선 지원 집단 수용 → 전체 수용 → 낮은 비용 순으로 비교합니다.</p></div><span id="comparison-count" class="tiny-badge">조합 계산 중</span></div><div id="alternatives" class="alternatives"></div><p class="footnote">직사광 노출은 각 대안에서 수용된 사람들의 평균입니다. 대상자가 달라지므로 두 평균의 차이를 같은 사람의 개선량으로 해석할 수 없습니다.</p></section>
+  <section class="data-section section" id="data-section"><div class="section-heading"><div><span class="eyebrow">EVIDENCE / EXECUTION</span><h2>데이터와 실행 근거</h2></div><button class="button small" id="source-toggle" aria-expanded="false" aria-controls="sources">출처·계산 가정 보기 ↓</button></div>
+    <div class="integration-grid"><article><span class="integration-icon">Z</span><div><h3>Zetaris <span id="zetaris-status" class="connection-label">미연결</span></h3><p>시설·비용 근거 조회 계층. 현재는 로컬 합성 자료를 사용합니다.</p><button id="check-zetaris" class="text-button" disabled>연결 검사 ↗</button></div></article><article><span class="integration-icon memory">M</span><div><h3>Meterless H-MEM <span class="connection-label">부분 구현</span></h3><p>명세를 참고한 제약 기억·버전 범위·수정 이력. 공식 엔진 전체 통합은 아닙니다.</p><button id="remember" class="text-button">현재 제약 기억하기 ＋</button></div></article><article><span class="integration-icon nvidia">N</span><div><h3>NVIDIA Nemotron <span id="nvidia-status" class="connection-label">미연결</span></h3><p>검증된 결과 설명용 서버 어댑터. 키가 없으면 모델을 호출하지 않습니다.</p><button id="explain" class="text-button" disabled>모델로 결과 설명 ↗</button></div></article></div>
+    <div class="evidence-grid"><article class="evidence-panel"><div class="field-heading"><h3>제약 기억</h3><button id="restore-memory" class="text-button" disabled>최근 제약 적용 ↺</button></div><p id="memory-text">아직 저장한 제약이 없습니다.</p><small id="memory-meta">지역·데이터 버전이 같은 기억만 재사용합니다.</small></article><article class="evidence-panel"><div class="field-heading"><h3>실행 기록</h3><span id="run-id" class="mono">—</span></div><ol id="trace" class="trace"><li>첫 계산을 준비하고 있습니다.</li></ol></article></div>
+    <div id="model-answer" class="model-answer" hidden></div>
+    <div id="sources" class="sources" hidden><h3>이번 대시보드에 실제로 사용한 자료</h3><p>지리적 기준점만 Parramatta의 위·경도를 사용합니다. 모든 건물·수관·도로·시설·수요는 고정 시드로 생성한 <strong>합성 자료</strong>입니다. 시설명은 가상이며, NSW·ABS 공개자료를 불러왔다고 표시하지 않습니다.</p><ul><li>태양: <a href="https://gml.noaa.gov/grad/solcalc/solareqns.PDF" target="_blank" rel="noopener">NOAA 근사식</a> · Australia/Sydney 시간대와 일광절약시간 적용.</li><li>그늘: 평탄 지형의 불투명 직육면체 + 투과율 25%의 단순 수관. 옥외 20m 격자 표본, 경로는 20m 간격·이동 중 분 단위 태양 위치.</li><li>보행: 합성 보행망의 최단 거리. 직선 반경이 아니며, 경사·신호 대기는 미반영. 최소 노출 경로를 최적화하지 않습니다.</li><li>수용: 한 번의 출발 집단, 도착 후 30분 체류. 시설별 동시 수용량을 공유하고 사람 수를 중복 집계하지 않습니다.</li><li>배치: 후보 부분집합 전수 비교. 우선 집단 수용 최대화 후 전체 수용 최대화. 그룹 내부의 지역별 형평성은 최적화하지 않습니다.</li><li>미구현: 실제 GIS 수집, 지형·열환경·기상 모델, PostgreSQL/PostGIS, CesiumJS, 운영형 H-MEM, Nemotron Planner 도구 루프.</li></ul><h3>실데이터로 교체할 때의 공식 출처</h3><p><a href="https://data.nsw.gov.au/data/dataset/2022-heat-vulnerability-index-for-the-greater-sydney-region" target="_blank" rel="noopener">NSW HVI</a> · <a href="https://planning.nsw.gov.au/the-planning-system/urban-greening/urban-heat-and-canopy-data" target="_blank" rel="noopener">NSW 수관 피복</a> · <a href="https://www.abs.gov.au/census/find-census-data" target="_blank" rel="noopener">ABS Census</a> · <a href="https://github.com/Meterless/Meterless/tree/main/engines/hmem" target="_blank" rel="noopener">Meterless H-MEM 명세</a></p></div>
+  </section>
+</main>
+<footer><span>✳ COOL SYDNEY <span class="footer-muted">/ 도시 그늘 실험실</span></span><span>Prototype 0.1 · 합성 데이터 · 기온·건강 위험 예측 제외</span></footer>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<noscript><p class="error">이 대시보드는 계산과 지도 표시를 위해 JavaScript가 필요합니다.</p></noscript>
+<script>/* DATASET_SCRIPT */</script><script>/* ENGINE_SCRIPT */</script><script>/* MEMORY_SCRIPT */</script><script>/* APP_SCRIPT */</script>
+</body></html>

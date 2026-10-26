@@ -1,0 +1,12 @@
+{
+  "name": "cool-sydney",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Server-backed Sydney GIS, local GeoParquet and urban shade scenario dashboard",
+  "scripts": {
+    "build": "node build.js",
+    "start": "node server.js",
+    "test": "node build.js && node --test tests/*.test.js"
+  },
+  "engines": {"node": ">=22"}
+}

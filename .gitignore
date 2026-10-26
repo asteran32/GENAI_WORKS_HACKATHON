@@ -1,0 +1,31 @@
+# Credentials (also applies inside subdirectories)
+.env
+.env.*
+!.env.example
+
+# Python environment and local caches
+.venv/
+.venv-*/
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.publish/
+*.egg-info/
+
+# Local operating system files and logs
+.DS_Store
+*.log
+
+# Installed platform and downloaded reference repository
+/zetaris-platform/
+/getting-started/
+
+# Platform bundle is exchanged directly from shared/, outside Git
+zetaris-platform*.zip
+
+# Local product corpus and generated assets (keep only directory placeholders)
+/data/**
+!/data/**/
+!/data/**/.gitkeep
