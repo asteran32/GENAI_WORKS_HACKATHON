@@ -94,7 +94,7 @@ function facadeMaterial({ color, metalness, roughness, floor, bay, glass = 0.4, 
 }
 
 /** Flat map layers need real vertical separation — cm gaps z-fight at city scale. */
-const LAYER_Y = { base: -8, water: 2.2, shade: 3.4, cells: 4.2, bounds: 14, roadBase: 0.35 };
+const LAYER_Y = { base: -8, water: 2.2, shade: 3.4, cells: 4.2, bounds: 14, roadBase: 0.35, walk: 5.5, route: 8 };
 const CANVAS = '#f8fafc';
 const DATA_INK = { shade: '#1d4ed8', cells: '#1e40af', bounds: '#1d4ed8', hover: '#1d4ed8' };
 /** Server shadow grid (gis-shadow.js): 20 m samples starting 10 m inside the south-west corner. */
@@ -251,10 +251,22 @@ export class CityScene {
     }
     this.scene.add(this.grid);
     this.buildings = new T.Group(); this.ground = new T.Group(); this.edges = new T.Group(); this.shades = new T.Group(); this.cells = new T.Group(); this.highlight = new T.Group();
-    this.scene.add(this.ground, this.shades, this.cells, this.buildings, this.edges, this.highlight);
+    this.walk = new T.Group(); this.trees = new T.Group(); this.sites = new T.Group(); this.routes = new T.Group();
+    this.scene.add(this.ground, this.shades, this.cells, this.buildings, this.edges, this.walk, this.trees, this.sites, this.routes, this.highlight);
     this.shadeCasters = []; this.excluders = []; this.landmarks = []; this.focusId = null; this._ndc = new T.Vector3(); this._sun = null;
     this.layers = { shade: true, cells: true };
-    this.raycaster = new T.Raycaster(); this._pointer = new T.Vector2(); this.hoverId = null;
+    this.raycaster = new T.Raycaster(); this._pointer = new T.Vector2(); this.hoverId = null; this.onMapClick = null;
+    let down = null;
+    this.renderer.domElement.addEventListener('pointerdown', event => { down = [event.clientX, event.clientY]; });
+    this.renderer.domElement.addEventListener('pointerup', event => {
+      if (!down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5 || !this.onMapClick || !this.area) return;
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      const mouse = new T.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
+      const ray = new T.Raycaster(); ray.setFromCamera(mouse, this.camera); const hit = new T.Vector3();
+      if (!ray.ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), 0), hit)) return;
+      const lon = this.area.longitude + hit.x / (RAD * R * Math.cos(this.area.latitude * RAD)), lat = this.area.latitude - hit.z / (RAD * R);
+      if (lon >= this.area.west && lon <= this.area.east && lat >= this.area.south && lat <= this.area.north) this.onMapClick([lon, lat]);
+    });
     this.observer = new ResizeObserver(() => { const w = element.clientWidth, h = element.clientHeight; if (!w || !h) return; this.renderer.setSize(w, h); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }); this.observer.observe(element);
     this.renderer.setAnimationLoop(() => {
       this.scaleControlsToZoom();
@@ -577,9 +589,54 @@ export class CityScene {
   setLayer(name, on) {
     if (name === 'buildings') { this.buildings.visible = on; this.edges.visible = on; return; }
     if (name === 'ground') { this.ground.visible = on; return; }
+    if (name === 'walk' || name === 'trees' || name === 'sites') { this[name].visible = on; return; }
     this.layers[name] = on;
     if (name === 'shade') this.shades.children.forEach(m => { m.visible = on; });
     if (name === 'cells') this.cells.visible = on;
+  }
+  /** CBD walk network, street trees, and pedestrian count sites. */
+  setCBDLayers(data) {
+    for (const group of [this.walk, this.trees, this.sites, this.routes]) this.clear(group);
+    const vertices = [];
+    for (const edge of data.walk_edges || []) for (const point of edge.geometry.coordinates) {
+      const [x, y] = this.project(point); vertices.push(x, LAYER_Y.walk, -y);
+    }
+    if (vertices.length) {
+      const geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', new T.Float32BufferAttribute(vertices, 3));
+      this.walk.add(new T.LineSegments(geometry, new T.LineBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: .7, depthWrite: false })));
+    }
+    const markers = (rows, group, color, radius) => {
+      if (!rows?.length) return;
+      const geometry = new T.SphereGeometry(radius, 6, 4), material = new T.MeshBasicMaterial({ color }), mesh = new T.InstancedMesh(geometry, material, rows.length), matrix = new T.Matrix4();
+      rows.forEach((row, i) => { const [x, y] = this.project([row.lon, row.lat]); matrix.makeTranslation(x, radius, -y); mesh.setMatrixAt(i, matrix); });
+      mesh.instanceMatrix.needsUpdate = true; group.add(mesh);
+    };
+    markers(data.trees, this.trees, '#22c55e', 2.5);
+    markers(data.pedestrian_sites, this.sites, '#f59e0b', 6);
+  }
+  /** Fastest (amber) vs lower-exposure (cyan) walk routes as raised ribbons. */
+  setRoutes(result) {
+    this.clear(this.routes);
+    if (!result) return;
+    for (const [route, color, height, width] of [[result.fastest, '#f59e0b', LAYER_Y.route, 6], [result.lower_exposure, '#14b8a6', LAYER_Y.route + 1, 3]]) {
+      if (!route?.coordinates?.length) continue;
+      const positions = [];
+      for (let i = 1; i < route.coordinates.length; i++) {
+        const a = this.project(route.coordinates[i - 1]), b = this.project(route.coordinates[i]);
+        const dx = b[0] - a[0], dy = b[1] - a[1], length = Math.hypot(dx, dy); if (!length) continue;
+        const nx = -dy / length * width / 2, ny = dx / length * width / 2;
+        const p = [a[0] + nx, height, -a[1] - ny], q = [a[0] - nx, height, -a[1] + ny];
+        const r = [b[0] + nx, height, -b[1] - ny], s = [b[0] - nx, height, -b[1] + ny];
+        positions.push(...p, ...q, ...r, ...q, ...s, ...r);
+      }
+      if (!positions.length) continue;
+      const geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+      geometry.computeVertexNormals();
+      const mesh = new T.Mesh(geometry, new T.MeshBasicMaterial({ color, side: T.DoubleSide, depthTest: false, depthWrite: false, transparent: true, opacity: .95 }));
+      mesh.renderOrder = 10; this.routes.add(mesh);
+    }
   }
   /**
    * Fast screen-side estimate of the server's shade ratio: rasterise each caster's swept

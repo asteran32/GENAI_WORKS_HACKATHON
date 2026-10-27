@@ -8,6 +8,7 @@ const E = require('./src/engine');
 const { createStore } = require('./src/memory');
 const integrations = require('./integrations');
 const { createGISStore } = require('./gis-store');
+const { createCBDStore } = require('./cbd-store');
 const { createZetarisGIS } = require('./zetaris-gis');
 class ApiError extends Error { constructor(status, message) { super(message); this.status = status; } }
 function atomicJSON(file, body) { const temp = `${file}.${randomUUID()}.tmp`; fs.writeFileSync(temp, JSON.stringify(body, null, 2), { mode: 0o600 }); fs.renameSync(temp, file); }
@@ -23,7 +24,7 @@ function createService({ directory, env = process.env, transport = fetch } = {})
   const persistMemory = () => atomicJSON(memoryFile, memory.state);
   const scope = { areaId: data.areaId, datasetVersion: data.version };
   const queue = [], workers = new Set(), explanations = new Map();
-  const gis = createGISStore(root, { env, transport }), zetarisGIS = createZetarisGIS(root, env, transport);
+  const gis = createGISStore(root, { env, transport }), cbd = createCBDStore(root, { env, transport, gis }), zetarisGIS = createZetarisGIS(root, env, transport);
   let gisRunning = false;
   let running = false, closed = false;
   // Interrupted jobs must not remain stuck in a fake running state after restart.
@@ -56,14 +57,53 @@ function createService({ directory, env = process.env, transport = fetch } = {})
     worker.once('error', () => finish('계산 워커에서 오류가 발생했습니다.'));
     worker.once('exit', code => { if (!finished) finish(`계산 워커가 결과 없이 종료됐습니다 (${code}).`); });
   }
-  async function dispatch(method, route, body) {
+  async function dispatch(method, route, body, searchParams = new URLSearchParams()) {
     if (closed) throw new ApiError(503, '서버가 종료 중입니다.');
-    if (method === 'GET' && route === '/api/status') return { app: 'cool-sydney', solverVersion: 'gis-shade-0.3', gis: gis.metadata(), ...integrations.configuration(env) };
+    if (method === 'GET' && route === '/api/status') return { app: 'cool-sydney', solverVersion: 'gis-shade-0.3', gis: gis.metadata(), cbd: cbd.metadata(), ...integrations.configuration(env) };
     if (route.startsWith('/api/gis/')) {
       try {
         if (method === 'GET' && route === '/api/gis/status') return gis.metadata();
         if (method === 'GET' && route === '/api/gis/data') return await gis.get();
         if (method === 'POST' && route === '/api/gis/import') { await gis.load(); return gis.metadata(); }
+        if (method === 'GET' && route === '/api/gis/datasets') {
+          const state = cbd.metadata();
+          if (!state.ready) return { ...state, components:{ buildings:gis.metadata().ready ? { ready:true, version:gis.metadata().version } : { ready:false }, walk_graph:{ready:false}, trees:{ready:false}, pedestrian_counts:{ready:false}, weather:{ready:false} } };
+          const { manifest } = await cbd.get();
+          return { ...state, bundle_version:manifest.bundle_version, date:manifest.date, components:Object.fromEntries(Object.entries(manifest.components).map(([key,version])=>[key,{ready:!!version,version}])), sources:manifest.sources, quality:manifest.quality, files:manifest.files, validation_status:manifest.validation_status };
+        }
+        if (method === 'POST' && route === '/api/gis/cbd/import') {
+          if (!gis.metadata().ready) throw new ApiError(422,'건물 GIS 자료를 먼저 가져오세요.');
+          try { require('./cbd-store').dateWindow(body?.date); } catch(error) { throw new ApiError(422,error.message); }
+          await cbd.load(body?.date); return await dispatch('GET','/api/gis/datasets');
+        }
+        if (method === 'GET' && route === '/api/gis/layers') {
+          const { manifest, tables } = await cbd.get();
+          return { bundle_version:manifest.bundle_version, area:require('./city-data').AREA, walk_edges:tables.walk_edges.map(e=>({ id:e.id, quality:e.quality, geometry:e.geometry })), trees:tables.trees, pedestrian_sites:tables.pedestrian_sites };
+        }
+        if (method === 'GET' && route === '/api/gis/observations') {
+          const instant=searchParams.get('instant'), time=new Date(instant);
+          if (!instant || !Number.isFinite(+time) || time.toISOString()!==instant) throw new ApiError(422,'유효한 UTC ISO 시각이 필요합니다.');
+          const { manifest, tables }=await cbd.get(), hour=time.toISOString().slice(0,13);
+          const day=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(time).map(p=>[p.type,p.value]));
+          if (`${day.year}-${day.month}-${day.day}`!==manifest.date) throw new ApiError(422,'묶음 날짜의 시각을 조회하세요.');
+          const counts=tables.pedestrian_counts.filter(c=>c.instant_utc.startsWith(hour)).map(c=>({ ...c, passages:c.quality==='known-undercount'?null:c.passages }));
+          const weather=tables.weather.find(w=>w.instant_utc.startsWith(hour))||null;
+          return { bundle_version:manifest.bundle_version, instant_utc:time.toISOString(), date:manifest.date, counts, weather, sites:tables.pedestrian_sites, limitations:['자동 계수는 2025년 6월에 종료됐습니다. 관측이 없는 구간은 수치를 추정하지 않습니다.','기상은 격자 재분석 자료이며 거리 수준의 실측이 아닙니다.'] };
+        }
+        if (method === 'POST' && route === '/api/gis/routes') {
+          const { validateInput }=require('./cbd-route'), bundle=await cbd.get(), map=await gis.get();
+          try { validateInput(body,bundle.manifest.date); } catch(error) { throw new ApiError(422,error.message); }
+          const result=await new Promise((resolve,reject)=>{
+            const worker=new Worker(path.join(__dirname,'cbd-worker.js'),{workerData:{gis:map,cbd:bundle,input:body},resourceLimits:{maxOldGenerationSizeMb:384}});
+            workers.add(worker); let done=false;
+            const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);workers.delete(worker);worker.terminate();error?reject(new ApiError(422,error)):resolve(value);};
+            const timer=setTimeout(()=>finish('경로 계산이 30초를 초과했습니다.'),30000);
+            worker.once('message',message=>finish(message.error,message.result)); worker.once('error',()=>finish('경로 워커 오류입니다.'));
+            worker.once('exit',()=>{if(!done)finish('경로 워커가 결과 없이 종료됐습니다.');});
+          });
+          const run={...result,runId:randomUUID(),dataKind:'cbd-walking-shade-scenario',createdAt:new Date().toISOString()};
+          write('runs',run.runId,run); return run;
+        }
         if (method === 'GET' && route === '/api/gis/zetaris/plan') return zetarisGIS.plan(await gis.get());
         if (method === 'POST' && route === '/api/gis/zetaris/register') return await zetarisGIS.register(await gis.get());
         if (method === 'GET' && route === '/api/gis/zetaris/summary') return await zetarisGIS.summary(await gis.get());

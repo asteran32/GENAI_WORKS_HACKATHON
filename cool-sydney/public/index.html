@@ -95,6 +95,16 @@ a{color:var(--data-verified-deep)}
 .sw-shade{background:var(--data-shade-fill);border-color:var(--data-verified)}
 .sw-cells{background:radial-gradient(circle,var(--data-verified-deep) 0 2px,transparent 2.5px) 0 0/6px 6px,var(--bg-white);border-color:var(--data-verified-deep)}
 .sw-ground{background:linear-gradient(90deg,#D3DBE4 50%,#D5E3D8 50%)}
+.sw-walk{background:#0ea5e9}
+.sw-tree{background:#22c55e}
+.sw-site{background:#f59e0b}
+.btn-route{margin-top:var(--s3);background:#0f766e;border-color:#0f766e;color:#fff}
+.btn-route:hover:not(:disabled){background:#115e59;border-color:#115e59}
+.button-pair .btn{width:50%}
+#observations-card,#route-result{margin-top:var(--s3)}
+#observations-card .card-head code,#route-run{font-size:var(--fs-10);color:var(--ink-3);overflow-wrap:anywhere}
+#cbd-sources{padding-left:14px;font-size:var(--fs-10);line-height:1.7;color:var(--ink-2);margin:6px 0 0}
+#cbd-sources a{color:var(--data-verified-deep)}
 
 .note{margin:var(--s4) var(--s5) var(--s6);padding:var(--s3);background:var(--warn-bg);border:1px solid #FDE68A;border-left:2px solid var(--warn);border-radius:var(--radius)}
 .note b{font-size:var(--fs-11);color:#92400E}
@@ -311,12 +321,31 @@ canvas{display:block;max-width:100%}
     <label class="switch"><i class="swatch sw-ground"></i><span>도로 · 녹지 · 수면</span><input type="checkbox" id="layer-ground" checked></label>
   </section>
 
+  <section class="block">
+    <h2 class="eyebrow"><b>05</b> CBD data</h2>
+    <button class="btn" id="cbd-import" disabled>선택한 날짜의 CBD 자료 가져오기</button>
+    <p class="hint" id="cbd-state">보행망·수목·자동 계수·과거 기상 자료 대기</p>
+    <label class="switch"><i class="swatch sw-walk"></i><span>보행망</span><input type="checkbox" id="walk-layer" checked></label>
+    <label class="switch"><i class="swatch sw-tree"></i><span>수목 자산</span><input type="checkbox" id="tree-layer" checked></label>
+    <label class="switch"><i class="swatch sw-site"></i><span>계수 지점</span><input type="checkbox" id="site-layer" checked></label>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>06</b> Walk route</h2>
+    <p class="hint">버튼을 누른 뒤 지도에서 출발점과 도착점을 차례로 선택하세요.</p>
+    <div class="button-pair"><button class="btn btn-sm" id="pick-start" disabled>출발 선택</button><button class="btn btn-sm" id="pick-end" disabled>도착 선택</button></div>
+    <p class="hint" id="route-points">출발 · 미선택 / 도착 · 미선택</p>
+    <label class="field"><span>우회 허용 시간 (분)</span><input id="detour" type="number" min="0" max="20" step="1" value="5" class="mono"></label>
+    <label class="field"><span>보행 프로필</span><select id="profile"><option value="standard">일반 보행</option><option value="step_free">계단 없는 후보 구간</option></select></label>
+    <button class="btn btn-route" id="route" disabled>두 경로 비교</button>
+  </section>
+
   <section class="block block-actions">
     <button class="btn" id="simulate" disabled>이 시각 서버 검증 계산</button>
     <button class="btn btn-quiet" id="save" disabled>관찰 조건 기억하기</button>
   </section>
 
-  <aside class="note"><b>해석의 범위</b><p>그림자 투영은 화면 표시용 기하 추정이며, 그늘 비율의 기준값은 서버 광선 교차 계산(20 m 표본)입니다. 높이는 렌더링용 파생값이고, 그늘 비율이 냉방 수요를 뜻하지 않습니다.</p></aside>
+  <aside class="note"><b>해석의 범위</b><p>그림자 투영은 화면 표시용 기하 추정이며, 그늘 비율의 기준값은 서버 광선 교차 계산(20 m 표본)입니다. 수목 그늘은 수관 치수·하단 높이 가정에 따른 시나리오이고, 차도 중심선 구간은 보도 위치와 햇빛 노출을 미상으로 표시합니다.</p></aside>
 </aside>
 
 <section class="stage" aria-label="시드니 3차원 GIS 지도">
@@ -347,7 +376,7 @@ canvas{display:block;max-width:100%}
 
 <aside class="panel panel-right" aria-label="분석 결과">
   <section class="block">
-    <h2 class="eyebrow"><b>05</b> Analytics</h2>
+    <h2 class="eyebrow"><b>07</b> Analytics</h2>
     <div class="kpi-hero card">
       <div class="card-head"><span>지면 그늘 비율</span><span class="pill" id="verify-state" data-tone="idle">대기</span></div>
       <strong class="mono" id="shade-percent">—<small>%</small></strong>
@@ -380,7 +409,22 @@ canvas{display:block;max-width:100%}
   </section>
 
   <section class="block">
-    <h2 class="eyebrow"><b>06</b> Provenance</h2>
+    <div class="card" id="observations-card">
+      <div class="card-head"><span>Observations / model</span><code class="mono" id="bundle-version">CBD bundle / pending</code></div>
+      <p class="hint" id="weather-result">과거 기상 자료 대기</p>
+      <p class="hint" id="counts-result">보행 계수 자료 대기</p>
+      <details><summary>자료 출처 및 품질</summary><ul id="cbd-sources"></ul></details>
+    </div>
+    <div class="card" id="route-result" hidden>
+      <div class="card-head"><span>Walk route comparison</span></div>
+      <p id="route-summary"></p>
+      <p class="hint" id="route-quality"></p>
+      <code class="mono" id="route-run"></code>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>08</b> Provenance</h2>
     <dl class="spec">
       <dt>건물 형상 조각</dt><dd class="mono" id="building-count">—</dd>
       <dt>높이 압출 가능</dt><dd class="mono" id="height-count">—</dd>
@@ -393,7 +437,7 @@ canvas{display:block;max-width:100%}
   </section>
 
   <section class="block">
-    <h2 class="eyebrow"><b>07</b> Integrations</h2>
+    <h2 class="eyebrow"><b>09</b> Integrations</h2>
     <div class="integration"><div class="int-head"><b>Zetaris</b><span id="zetaris-state" class="pill" data-tone="idle">미확인</span></div><p>Parquet를 가상 테이블로 등록하고 동일 버전의 행 수를 조회합니다.</p><div class="button-pair"><button class="btn btn-sm" id="register" disabled>등록</button><button class="btn btn-sm" id="verify" disabled>조회</button></div><details><summary>등록 SQL 보기</summary><pre id="sql-plan">GIS 저장 후 생성됩니다.</pre></details><pre id="sql-result" hidden></pre></div>
     <div class="integration"><div class="int-head"><b>NVIDIA Nemotron</b><span id="nvidia-state" class="pill" data-tone="idle">미확인</span></div><p>계산 결과의 가정과 한계를 설명합니다. 요청 시 모델 API를 호출합니다.</p><button class="btn btn-sm" id="explain" disabled>이 결과 설명하기</button><p id="explanation" class="answer"></p></div>
     <div class="integration"><div class="int-head"><b>Meterless H-MEM</b><span class="pill" data-tone="warn">일부 구현</span></div><p id="memory-state">관찰 조건의 출처·버전·변경 기록을 로컬에 저장합니다. 전체 엔진 통합 전입니다.</p></div>

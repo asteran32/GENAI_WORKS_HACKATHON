@@ -5,6 +5,7 @@
   "description": "Server-backed Sydney GIS, local GeoParquet and urban shade scenario dashboard",
   "scripts": {
     "build": "node build.js",
+    "import:cbd": "node import-cbd.js",
     "start": "node server.js",
     "test": "node build.js && node --test tests/*.test.js"
   },

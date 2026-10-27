@@ -28,7 +28,7 @@ function createHandler(service, port) {
         for await (const chunk of req) { size += chunk.length; if (size > 16384) throw new ApiError(413, '입력이 너무 큽니다.'); chunks.push(chunk); }
         try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw new ApiError(400, 'JSON 형식이 올바르지 않습니다.'); }
       }
-      const result = await service.dispatch(req.method, url.pathname, body);
+      const result = await service.dispatch(req.method, url.pathname, body, url.searchParams);
       return respond(req.method === 'POST' && /\/runs$/.test(url.pathname) ? 202 : 200, result);
     } catch (e) { if (!res.headersSent) respond(e instanceof ApiError ? e.status : 500, { error: e instanceof ApiError ? e.message : '서버에서 요청을 처리하지 못했습니다.' }); }
   };

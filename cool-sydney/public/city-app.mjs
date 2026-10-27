@@ -13,6 +13,7 @@ const SCENARIOS = [
 ];
 let scene, snapshot, run, status, busy = false, shadeTimer = null, pendingShade = false;
 let hour = 14, playing = false, speed = 1, lastFrame = 0;
+let cbd = null, pickMode = null, startPoint = null, endPoint = null, routeRun = null;
 const profiles = new Map(); // date → { values: (number|null)[], done }
 const verified = new Map(); // date → Map(hour → shadePercent)
 let profileJob = 0, chartHover = null;
@@ -27,6 +28,9 @@ async function api(route, method = 'GET', body) {
 function buttons() {
   $('import').disabled = busy || !!snapshot;
   for (const id of ['simulate','save']) $(id).disabled = busy || !snapshot;
+  $('cbd-import').disabled = busy || !snapshot;
+  for (const id of ['pick-start','pick-end']) $(id).disabled = busy || !cbd;
+  $('route').disabled = busy || !cbd || !startPoint || !endPoint || cbd.date !== dateValue();
   for (const id of ['register','verify']) $(id).disabled = busy || !snapshot || !status?.zetaris.configured;
   $('explain').disabled = busy || !run || !status?.nvidia.configured;
 }
@@ -124,7 +128,67 @@ function setHour(value, { schedule = true } = {}) {
   if (schedule) scheduleShade(); else applySunPreview();
 }
 function time() { return { date: dateValue(), hour }; }
-function onDateChange() { paintScenarios(); requestProfiles(); scheduleShade(); }
+/** Sydney-local civil time → UTC ISO for CBD observation/route APIs. */
+function instant() {
+  const { date, hour: h } = time(), target = Date.parse(`${date}T00:00:00Z`) + h * 3600000;
+  const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  let stamp = target;
+  for (let i = 0; i < 3; i++) {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(stamp)).map(x => [x.type, x.value]));
+    stamp += target - Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  }
+  return new Date(stamp).toISOString();
+}
+function onDateChange() {
+  paintScenarios(); requestProfiles(); scheduleShade();
+  if (cbd) loadObservations().catch(e => message(e.message, true));
+  buttons();
+}
+
+async function loadObservations() {
+  if (!cbd || cbd.date !== dateValue()) {
+    $('weather-result').textContent = '이 날짜의 CBD 자료를 가져오세요.';
+    $('counts-result').textContent = '관측일과 선택 날짜가 다릅니다.';
+    return;
+  }
+  const observed = await api(`/api/gis/observations?instant=${encodeURIComponent(instant())}`), weather = observed.weather;
+  $('weather-result').textContent = weather
+    ? `ERA5 (${weather.grid_lat?.toFixed(2)}, ${weather.grid_lon?.toFixed(2)}) · ${weather.temperature_c?.toFixed(1) ?? '—'}°C · 습도 ${weather.humidity_pct ?? '—'}% · 풍속 ${weather.wind_m_s ?? '—'}m/s · 일사 ${weather.shortwave_w_m2 ?? '—'}W/m²`
+    : '해당 시각의 재분석 기상 값 없음';
+  const available = observed.counts.filter(c => c.passages != null);
+  $('counts-result').textContent = available.length
+    ? `자동 계수 ${available.length}곳 · ${available.map(c => `${c.site_id} ${c.passages.toLocaleString()}회`).join(' / ')}`
+    : '해당 시각의 유효 자동 계수 없음 · 미관측 구간은 채우지 않음';
+}
+async function loadCBD() {
+  const state = await api('/api/gis/datasets'); if (!state.ready) return;
+  const layers = await api('/api/gis/layers'); cbd = state;
+  if (scene) scene.setCBDLayers(layers);
+  $('walk-layer').checked = true; $('tree-layer').checked = true; $('site-layer').checked = true;
+  $('cbd-state').textContent = `${state.date} · 보행 ${layers.walk_edges.length.toLocaleString()}구간 · 나무 ${layers.trees.length.toLocaleString()}그루 · 센서 ${layers.pedestrian_sites.length}곳`;
+  $('bundle-version').textContent = state.bundle_version;
+  $('cbd-sources').replaceChildren(...Object.entries(state.sources).map(([name, source]) => {
+    const li = document.createElement('li'), a = document.createElement('a');
+    a.href = source.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = name;
+    li.append(a, document.createTextNode(` · ${source.evidence_type} · ${source.license}`));
+    return li;
+  }));
+  if (dateValue() !== state.date) { $('date').value = state.date; onDateChange(); }
+  else { buttons(); await loadObservations(); }
+}
+async function importCBD() {
+  const selected = dateValue();
+  message('CBD 원천을 수집하고 Parquet로 검증합니다. 첫 수집에는 몇 분이 걸릴 수 있습니다.');
+  const timer = setInterval(async () => {
+    try { const state = await api('/api/gis/datasets'); if (state.progress?.message) $('cbd-state').textContent = state.progress.message; }
+    catch { /* import request reports errors */ }
+  }, 1500);
+  try {
+    await api('/api/gis/cbd/import', 'POST', { date: selected });
+    await loadCBD();
+    message('CBD 자료를 검증된 로컬 Parquet에서 읽었습니다. 출발·도착점을 지도에서 선택하세요.');
+  } finally { clearInterval(timer); }
+}
 
 /** Live map shadows follow the clock immediately; the server value refreshes after debounce. */
 function applySunPreview() {
@@ -319,9 +383,20 @@ $('map').addEventListener('pointermove', e => {
 $('map').addEventListener('pointerleave', () => { $('tooltip').hidden = true; scene?.setHover(null); });
 
 // ── Data loading & server calls ───────────────────────────
+function wireMapPick() {
+  if (!scene) return;
+  scene.onMapClick = point => {
+    if (!pickMode) return;
+    if (pickMode === 'start') startPoint = point; else endPoint = point;
+    pickMode = null;
+    $('route-points').textContent = `출발 ${startPoint ? startPoint.map(x => x.toFixed(5)).join(', ') : '미선택'} / 도착 ${endPoint ? endPoint.map(x => x.toFixed(5)).join(', ') : '미선택'}`;
+    buttons(); message('지점을 선택했습니다.');
+  };
+}
 async function load() {
   const data = await api('/api/gis/data');
   if (!scene) scene = new CityScene($('map'), { onPlace: place => { $('place-focus').textContent = place.focused ? `포커스 · ${place.name}` : `보는 곳 · ${place.name}`; } });
+  wireMapPick();
   scene.setData(data); snapshot = data; $('map-empty').hidden = true;
   for (const [id, layer] of [['buildings', 'buildings'], ['layer-shade', 'shade'], ['layer-cells', 'cells'], ['layer-ground', 'ground']]) scene.setLayer(layer, $(id).checked);
   $('place-focus').textContent = '보는 곳 · CBD';
@@ -334,6 +409,7 @@ async function load() {
   const memory = await api('/api/gis/memory'); if (memory) { $('date').value = memory.constraints.date; hour = memory.constraints.hour; $('hour').value = hour; $('memory-state').textContent = '같은 구역·자료 버전의 관찰 조건을 복원했습니다. 전체 H-MEM 엔진 통합 전입니다.'; }
   sunDays.clear(); paintScenarios(); requestProfiles(); applySunPreview();
   await calculate();
+  try { await loadCBD(); } catch { /* CBD optional until imported */ }
 }
 async function importData() {
   let polling = false;
@@ -368,20 +444,37 @@ async function calculate() {
   run = result; scene.setRun(run); $('explanation').textContent = '';
   $('run-model').textContent = `LoD1 광선 교차 · ${run.resolutionM} m`;
   applySunPreview();
+  if (cbd) await loadObservations().catch(() => {});
   message(run.daylight
     ? `검증 완료 · ${run.date} ${hhmm(run.hour)} · 파란 점은 서버가 그늘로 판정한 20 m 표본, 옅은 파란 면은 화면 그림자 투영입니다.`
     : '해가 지평선 아래입니다. 그늘 영역이 꺼져 있습니다.');
 }
 $('hour').addEventListener('input', () => { pause(); setHour(Number($('hour').value)); });
+$('hour').addEventListener('change', () => { if (cbd) loadObservations().catch(e => message(e.message, true)); });
 $('date').addEventListener('change', onDateChange);
 $('baseline').addEventListener('change', () => { requestProfiles(); paintComparison(); drawChart(); });
 $('import').addEventListener('click', () => work(importData));
+$('cbd-import').addEventListener('click', () => work(importCBD));
+$('pick-start').addEventListener('click', () => { pickMode = 'start'; message('지도에서 출발점을 클릭하세요.'); });
+$('pick-end').addEventListener('click', () => { pickMode = 'end'; message('지도에서 도착점을 클릭하세요.'); });
+$('route').addEventListener('click', () => work(async () => {
+  const payload = { start: startPoint, end: endPoint, departure_utc: instant(), profile: $('profile').value, max_detour_minutes: Number($('detour').value) };
+  message('보행망과 건물·나무 그늘을 따라 두 경로를 계산합니다.');
+  routeRun = await api('/api/gis/routes', 'POST', payload); scene.setRoutes(routeRun);
+  const a = routeRun.fastest, b = routeRun.lower_exposure;
+  $('route-result').hidden = false;
+  $('route-summary').textContent = `최단시간 ${a.travel_minutes}분 · 직사광 ${a.direct_sun_minutes}분 · 미상 ${a.unknown_minutes}분 / 저노출 후보 ${b.travel_minutes}분 · 직사광 ${b.direct_sun_minutes}분 · 미상 ${b.unknown_minutes}분`;
+  $('route-quality').textContent = `후보 ${routeRun.candidates_considered}개 · 시작 연결 ${routeRun.snap.start.distance}m · 도착 연결 ${routeRun.snap.end.distance}m · 저노출 경로는 전역 최적 보증이 아닌 후보 탐색입니다.`;
+  $('route-run').textContent = `run ${routeRun.runId} · ${routeRun.bundle_version}`;
+  message('경로 비교 완료. 노랑은 최단시간, 민트는 저노출 후보입니다.');
+}));
 $('simulate').addEventListener('click', () => work(calculate));
 $('save').addEventListener('click', () => work(async () => { await api('/api/gis/memory','POST',time()); $('memory-state').textContent = '현재 날짜·시각을 자료 버전 및 입력 출처와 함께 저장했습니다.'; message('관찰 조건을 로컬 기억 저장소에 저장했습니다.'); }));
 $('register').addEventListener('click', () => work(async () => { message('Zetaris에 Parquet 테이블을 등록하고 행 수와 버전을 검증합니다.'); const r = await api('/api/gis/zetaris/register','POST',{}); tone($('zetaris-state'), 'ok', '등록·조회 확인'); message(`Zetaris 조회 확인: ${r.rows.toLocaleString()}행 · ${r.datasetVersion}`); }));
 $('verify').addEventListener('click', () => work(async () => { const r = await api('/api/gis/zetaris/summary'); tone($('zetaris-state'), 'ok', '조회 확인'); $('sql-result').hidden = false; $('sql-result').textContent = JSON.stringify({ columns: r.columns, data: r.data },null,2); message(`Zetaris가 같은 버전의 ${r.rows.toLocaleString()}개 건물 형상 행을 조회했습니다.`); }));
 $('explain').addEventListener('click', () => work(async () => { message('NVIDIA 모델에 계산 결과 설명을 요청했습니다.'); const answer = await api(`/api/gis/runs/${run.runId}/explain`,'POST',{}); $('explanation').textContent = answer.text; message('AI 설명을 받았습니다. 수치는 GIS 워커가 계산하며, 설명은 별도로 검증되지 않았습니다.'); }));
 for (const [id, layer] of [['buildings', 'buildings'], ['layer-shade', 'shade'], ['layer-cells', 'cells'], ['layer-ground', 'ground']]) $(id).addEventListener('change', () => { scene?.setLayer(layer, $(id).checked); if (layer === 'cells') scene?.setCellsStale(!isVerifiedNow()); });
+for (const [id, layer] of [['walk-layer', 'walk'], ['tree-layer', 'trees'], ['site-layer', 'sites']]) $(id).addEventListener('change', () => { scene?.setLayer(layer, $(id).checked); });
 $('perspective').addEventListener('click', () => scene?.reset()); $('top').addEventListener('click', () => scene?.reset(true)); $('reset').addEventListener('click', () => scene?.reset());
 buildScenarioControls(); paintScenarios(); applySunPreview();
 await work(async () => {
