@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 function build() {
   const target = path.join(__dirname, 'public'); fs.mkdirSync(target, { recursive: true });
-  for (const [source, name] of [['city.html','index.html'],['city.css','city.css'],['city-app.mjs','city-app.mjs'],['agent-panel.mjs','agent-panel.mjs'],['city-scene.mjs','city-scene.mjs'],['sun.mjs','sun.mjs'],['mist-model.mjs','mist-model.mjs']]) fs.copyFileSync(path.join(__dirname,'src',source),path.join(target,name));
+  for (const [source, name] of [['city.html','index.html'],['city.css','city.css'],['city-app.mjs','city-app.mjs'],['agent-panel.mjs','agent-panel.mjs'],['city-scene.mjs','city-scene.mjs'],['sun.mjs','sun.mjs'],['mist-model.mjs','mist-model.mjs'],['submission-deck.html','submission-deck.html']]) fs.copyFileSync(path.join(__dirname,'src',source),path.join(target,name));
   // A server process from an older revision can serve the updated HTML while
   // missing newly added asset routes. Keep the layout visible in that case.
   const html = fs.readFileSync(path.join(target,'index.html'),'utf8').replace('<link rel="stylesheet" href="/city.css">', () => `<style>${fs.readFileSync(path.join(target,'city.css'),'utf8')}</style>`);
