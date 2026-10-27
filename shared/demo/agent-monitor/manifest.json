@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-10-27T15:02:53.462Z",
+  "analysis_date": "2025-12-19",
+  "latest_plan_id": "e24c15e7-cddd-4bfc-979d-034d8619e7bc",
+  "runs": [
+    {
+      "id": "e24c15e7-cddd-4bfc-979d-034d8619e7bc",
+      "question": "물도 하루 1,500L만 사용할 수 있어. 어느 구간과 시간대를 우선 유지하고, 어디를 줄여야 할까?",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T14:49:41.709Z",
+      "provider": "gemini",
+      "previous_run_id": "5644e552-ba58-4245-9229-e83e4ce83ef8",
+      "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e"
+    },
+    {
+      "id": "5644e552-ba58-4245-9229-e83e4ce83ef8",
+      "question": "사용할 수 있는 장비가 30대로 줄었어. 기존 예산과 우선순위는 유지하면서 다시 계획해줘.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T14:48:13.979Z",
+      "provider": "gemini",
+      "previous_run_id": "6edb85c1-15d1-41d9-9bae-b1456af14c48",
+      "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e"
+    },
+    {
+      "id": "6edb85c1-15d1-41d9-9bae-b1456af14c48",
+      "question": "출퇴근 시간에 더 많은 사람이 혜택을 받도록 바꿔줘. 다른 조건은 유지하고, 이전 계획에서 무엇이 달라졌는지 보여줘.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T14:45:57.536Z",
+      "provider": "gemini",
+      "previous_run_id": "766578d7-a055-423b-97b9-038a22bcc152",
+      "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e"
+    },
+    {
+      "id": "766578d7-a055-423b-97b9-038a22bcc152",
+      "question": "방금 찾은 상위 10개 구간에 포그 50대를 배치하려고 해. 하루 물 사용량은 3,000L 이내이고, 운영 가능 시간은 10시부터 18시까지야. 어느 구간에 몇 대를 배치하고 몇 시에 운영하면 좋을지 계획을 만들어줘. 추천 이유와 물 사용량도 알려줘.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T14:43:05.730Z",
+      "provider": "gemini",
+      "previous_run_id": "79e99e50-e8e9-4300-bda9-aa4cc8d798b6",
+      "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e"
+    },
+    {
+      "id": "79e99e50-e8e9-4300-bda9-aa4cc8d798b6",
+      "question": "전체 보행 조사 지점에서 평일 출퇴근 시간대의 보행량이 많은 구간 10곳을 찾아줘. 각 구간의 위치와 시간대별 보행량, 비교에 사용한 조사 시기를 알려줘.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T14:42:28.952Z",
+      "provider": "gemini",
+      "previous_run_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e",
+      "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e"
+    },
+    {
+      "id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e",
+      "question": "전체 보행 조사 지점에서 평일 출퇴근 시간대의 보행량이 많은 구간 10곳을 찾아줘. 각 구간의 위치와 시간대별 보행량, 비교에 사용한 조사 시기를 알려줘.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T13:47:26.545Z",
+      "provider": "gemini",
+      "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e"
+    }
+  ],
+  "mode": "recorded-replay",
+  "redactions": 0,
+  "notes": [
+    "Recorded executions, not fresh model or SQL calls. No credentials or live services are required to view them.",
+    "Original model responses are retained for debugging, including historical mistakes. Displayed plan numbers are derived from stored calculation rows.",
+    "The recorded commute-priority request was not recognized by the older parser. These historical runs retain commute_priority=false; new code fixes the parser."
+  ]
+}

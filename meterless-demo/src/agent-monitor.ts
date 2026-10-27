@@ -25,7 +25,7 @@ export function createAgentMonitor(options:{projectRoot?:string;transport?:typeo
       catch{return json({error:'모니터 화면 파일을 찾지 못했습니다. COOL_SYDNEY_PROJECT_ROOT를 확인하세요.'},503);}
     }
     const route=url.pathname.slice('/api/cool-sydney/'.length);
-    const readable=/^(status|graph|catalog|memories|runs|runs\/[a-f0-9-]{36})$/.test(route);
+    const readable=/^(status|graph|catalog|memories|plans\/latest|runs|runs\/[a-f0-9-]{36}(?:\/plan)?)$/.test(route);
     const writable=/^runs(?:\/[a-f0-9-]{36}\/memory)?$/.test(route);
     if(!url.pathname.startsWith('/api/cool-sydney/')||!(request.method==='GET'&&readable||request.method==='POST'&&writable))return json({error:'지원하지 않는 모니터 경로입니다.'},404);
     try{

@@ -12,6 +12,9 @@ const SCENARIOS = [
   { id: 'winter', name: '동지', note: '남반구 겨울', date: '2027-06-21' },
   { id: 'custom', name: '관찰일', note: '직접 지정', date: null },
 ];
+let agentPlan=window.coolSydneyPlan||null;
+window.addEventListener('cool-sydney-plan',event=>{agentPlan=event.detail;if(scene&&snapshot){applyAgentPlanDate();applySunPreview();}});
+function applyAgentPlanDate(){if(!agentPlan)return;$('date').value=agentPlan.analysis_date;leaveLiveMode();if(hour<agentPlan.operating_window.start_hour||hour>=agentPlan.operating_window.end_hour)hour=agentPlan.operating_window.start_hour;$('hour').value=hour;paintScenarios();requestProfiles();}
 let scene, snapshot, run, status, busy = false, shadeTimer = null, pendingShade = false;
 let hour = 14, playing = false, speed = 1, lastFrame = 0;
 let cbd = null, pickMode = null, startPoint = null, endPoint = null, routeRun = null;
@@ -436,6 +439,7 @@ function applySunPreview() {
   else { tweens.delete($('shadow-len')); $('shadow-len').textContent = '야간'; }
   paintCompass(sun);
   if (scene && snapshot) { scene.setSunLight(sun); scene.setCellsStale(!isVerifiedNow()); }
+  scene?.setAgentPlan(agentPlan,date,hour);
   paintVerification(); paintComparison(); drawChart();
   if (cbd && shownObservationKey !== `${cbd.bundle_version}:${dateValue()}:${Math.floor(hour)}` && shownObservationKey !== `unavailable:${dateValue()}`) loadObservations().catch(e => message(e.message, true));
   if (microMetadata?.ready && shownMicroKey !== `${microMetadata.version}:${$('micro-date').value}:${Math.floor(hour)}`) loadMicroclimate().catch(e => message(e.message, true));
@@ -669,6 +673,7 @@ async function load() {
   $('parquet-files').replaceChildren(...snapshot.manifest.files.map(f => { const li = document.createElement('li'); li.textContent = `${f.name} · ${f.rows.toLocaleString()}행`; return li; }));
   const plan = await api('/api/gis/zetaris/plan'); $('sql-plan').textContent = plan.statements.map(sql => sql + ';').join('\n\n');
   const memory = await api('/api/gis/memory'); if (memory) { $('date').value = memory.constraints.date; hour = memory.constraints.hour; $('hour').value = hour; leaveLiveMode(); $('memory-state').textContent = '같은 구역·자료 버전의 관찰 조건을 복원했습니다. 전체 H-MEM 엔진 통합 전입니다.'; }
+  applyAgentPlanDate();
   sunDays.clear(); paintScenarios(); requestProfiles(); applySunPreview();
   // Map layers are independent of the expensive shadow calculation. A failed
   // calculation must never prevent already-downloaded trees from appearing.

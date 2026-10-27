@@ -14,17 +14,12 @@ async function refresh(){
   if(!initialized){const runs=await api('/api/agent/runs');previousRun=runs.find(r=>r.date===date&&r.status==='completed')||null;initialized=true;contextNote();}
 }
 function paint(run){
-  if(run.status==='completed'){previousRun=run;contextNote();}
+  if(run.status==='completed'){previousRun=run;contextNote();if(run.plan&&$('agent-plan-auto').checked)loadLatestPlan();}
   const c=run.operating_conditions?.constraints;
   $('agent-conditions').textContent=c?`Inventory ${c.devices??'Not set'} units · Water budget ${c.water_budget_l??'Not set'} L · Commute priority ${c.commute_priority?'On':'Off'}`:'';
   $('agent-allocation').replaceChildren();
-  if(run.allocation){
-    const list=document.createElement('ul');
-    for(const row of run.allocation.allocation){const li=document.createElement('li');li.textContent=`${row.site_id?`Site ${row.site_id} · `:''}${row.name}${row.description?` (${row.description})`:''}: ${row.devices} units${row.change==null?'':` (Change ${row.change>=0?'+':''}${row.change})`}`;list.append(li);}
-    $('agent-allocation').append(list);
-    const note=document.createElement('p');note.className='hint';note.textContent='Demand-based allocation proposal. Installation positions require site checks.';$('agent-allocation').append(note);
-  }
-  $('agent-answer').textContent=run.answer||(run.status==='failed'?'Could not create a plan. Ask the operator to inspect this run.':'Reviewing conditions and evidence…');
+  if(run.allocation)renderCalculatedPlan($('agent-allocation'),run.allocation);
+  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation):run.answer||(run.status==='failed'?'Could not create a plan. Ask the operator to inspect this run.':'Reviewing conditions and evidence…');
   const saved=run.events.filter(e=>['memory_saved','memory_save_error'].includes(e.type)).at(-1);
   $('agent-save-notice').textContent=saved?(saved.type==='memory_saved'?'Operating conditions saved for future requests.':'Memory save failed. Continue this conversation to retain its conditions.'):'';
 }
@@ -45,3 +40,23 @@ $('agent-run').addEventListener('click',async()=>{
 $('agent-refresh').addEventListener('click',()=>refresh().catch(()=>{$('agent-status').textContent='Could not connect to the planning service.';}));
 $('agent-show-date').addEventListener('click',()=>window.dispatchEvent(new CustomEvent('cool-sydney-analysis-date',{detail:date})));
 refresh().catch(()=>{$('agent-status').textContent='Could not connect to the planning service.';});
+
+let appliedPlanId=null,planPollFailures=0,planTimer=null,planLoading=false;
+async function loadLatestPlan(){
+  if(planLoading)return;planLoading=true;
+  try{
+    const {plan}=await api('/api/agent/plans/latest');planPollFailures=0;
+    if(!plan){$('agent-plan-status').textContent='No exported allocation plan yet.';return;}
+    if(plan.schema_version!=='cool-sydney.fog-plan.v1')throw new Error('Unsupported plan format.');
+    $('agent-plan-json').hidden=false;$('agent-plan-json').href=`/api/agent/runs/${plan.run_id}/plan`;$('agent-plan-json').download=plan.plan_id+'.json';
+    const mapped=plan.allocations.filter(a=>a.position&&a.units>0),missing=plan.allocations.filter(a=>!a.position&&a.units>0);
+    $('agent-plan-status').textContent=`Plan ${plan.analysis_date}: ${plan.totals.units} units · ${plan.totals.water_l.toFixed(1)} L. ${mapped.length} reference markers; ${missing.length} sites (${missing.reduce((n,a)=>n+a.units,0)} units) need coordinates. Exact device layout is not yet specified.`;
+    if(appliedPlanId!==plan.plan_id){appliedPlanId=plan.plan_id;window.coolSydneyPlan=plan;window.dispatchEvent(new CustomEvent('cool-sydney-plan',{detail:plan}));}
+  }catch(error){planPollFailures++;$('agent-plan-status').textContent=`Plan sync unavailable: ${error.message}${planPollFailures>=3?' Automatic polling stopped; click Load latest plan to retry.':''}`;}
+  finally{planLoading=false;}
+}
+async function pollPlan(){clearTimeout(planTimer);if(document.hidden||!$('agent-plan-auto').checked)return;await loadLatestPlan();if(planPollFailures<3)planTimer=setTimeout(pollPlan,15000);}
+$('agent-plan-load').addEventListener('click',()=>{planPollFailures=0;loadLatestPlan().then(()=>{if($('agent-plan-auto').checked){clearTimeout(planTimer);planTimer=setTimeout(pollPlan,15000);}});});
+$('agent-plan-auto').addEventListener('change',()=>{clearTimeout(planTimer);if($('agent-plan-auto').checked){planPollFailures=0;pollPlan();}});
+document.addEventListener('visibilitychange',()=>{clearTimeout(planTimer);if(!document.hidden&&planPollFailures<3)pollPlan();});
+pollPlan();

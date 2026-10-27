@@ -87,7 +87,7 @@ test('map geometry changes temperature colors between views and masks blocked gr
   const fs = require('node:fs'), path = require('node:path'), { pathToFileURL } = require('node:url');
   const vendor = pathToFileURL(path.resolve(__dirname,'../vendor/scene-vendor.mjs')).href;
   const modelUrl = pathToFileURL(path.resolve(__dirname,'../src/mist-model.mjs')).href;
-  const source = fs.readFileSync(path.resolve(__dirname,'../src/city-scene.mjs'),'utf8').replace("'/vendor/scene-vendor.mjs'",JSON.stringify(vendor)).replace("'./mist-model.mjs'",JSON.stringify(modelUrl));
+  const source = fs.readFileSync(path.resolve(__dirname,'../src/city-scene.mjs'),'utf8').replace("'/vendor/scene-vendor.mjs'",JSON.stringify(vendor)).replace("'./mist-model.mjs'",JSON.stringify(modelUrl)).replace("'./agent-plan-view.mjs'",JSON.stringify(pathToFileURL(path.resolve(__dirname,'../src/agent-plan-view.mjs')).href));
   const [{ CityScene }, T, { mistSource }] = await Promise.all([import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`),import(vendor),import(modelUrl)]);
   const scene = Object.create(CityScene.prototype);
   Object.assign(scene, { area:{west:151.19,east:151.22,south:-33.88,north:-33.85,longitude:151.205,latitude:-33.865}, mist:new T.Group(), shades:new T.Group(), cells:new T.Group(), layers:{cells:true}, _sun:{daytime:true}, excluders:[[[[2,2],[8,2],[8,8],[2,8],[2,2]]]] });

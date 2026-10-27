@@ -1,11 +1,11 @@
 const NS='http://www.w3.org/2000/svg';
 const titles={__start__:'START',load_context:'Load context',model:'Model decision',tools:'Execute tools',finish:'Return plan',__end__:'END'};
-Object.assign(titles,{load_catalog:'Load catalog',recall_memory:'Recall Meterless',compose_prompt:'Compose prompt',route_tools:'Route tools',execute_sql:'Validate & run SQL',query_forecast:'Query forecast',allocate_devices:'Allocate fog',simulate_cooling:'Simulate cooling',inspect_catalog:'Inspect catalog',reject_tool:'Reject unknown tool'});
+Object.assign(titles,{load_catalog:'Load catalog',recall_memory:'Recall Meterless',compose_prompt:'Compose prompt',route_tools:'Route tools',execute_sql:'Validate & run SQL',query_forecast:'Query forecast',allocate_devices:'Allocate fog',simulate_cooling:'Simulate cooling',inspect_catalog:'Inspect catalog',reject_tool:'Reject unknown tool',export_plan:'Export plan JSON'});
 const executionNodeIds=['execute_sql','query_forecast','allocate_devices','simulate_cooling','inspect_catalog','reject_tool'];
 const descriptions={__start__:'Graph start',load_context:'Load catalog, recall memory and assemble the prompt before calling the model.',model:'Generate SQL or tool calls, then interpret their results.',tools:'Validated SQL, returned rows, calculation inputs and outputs.',finish:'Return final answer',__end__:'Graph ends. Memory is saved afterward.'};
 Object.assign(descriptions,{load_catalog:'Load registered tables and columns.',recall_memory:'Recall operating memories and their sources.',compose_prompt:'Assemble instructions, catalog, conversation, question and memory.',route_tools:'Route each requested function to its execution node.'});
 const positions={__start__:[70,210],load_context:[260,210],model:[500,210],tools:[760,80],finish:[760,340],__end__:[980,340]};
-const detailedPositions={__start__:[60,70],load_catalog:[250,70],recall_memory:[490,70],compose_prompt:[730,70],model:[1000,70],route_tools:[1000,250],execute_sql:[170,450],query_forecast:[410,450],allocate_devices:[650,450],simulate_cooling:[890,450],inspect_catalog:[1130,450],reject_tool:[1130,620],finish:[650,250],__end__:[410,250]};
+const detailedPositions={__start__:[60,70],load_catalog:[250,70],recall_memory:[490,70],compose_prompt:[730,70],model:[1000,70],route_tools:[1000,250],execute_sql:[170,450],query_forecast:[410,450],allocate_devices:[650,450],simulate_cooling:[890,450],inspect_catalog:[1130,450],reject_tool:[1130,620],finish:[720,250],export_plan:[470,250],__end__:[220,250]};
 const eventGroups={load_context:['catalog','memory','operating_conditions','context_prompt'],model:['model_request','model'],tools:['tool_call','sql_request','tool_result','tool_error','forecast_read','survey_read','forecast_cache_hit','candidates_selected'],finish:['answer']};
 const edgeKey=(a,b)=>`${a}->${b}`;
 
@@ -24,7 +24,7 @@ export function graphExecution(graph,run,now=Date.now()){
       const start=opened.get(event.node),end=Date.parse(event.at);
       if(Number.isFinite(start)&&Number.isFinite(end))node.duration_ms+=Math.max(0,end-start);
       opened.delete(event.node);node.state=event.type==='node_error'?'error':'done';node.events.push(event);activeNode=null;
-      if(event.node==='finish'&&event.type==='node_end'&&nodes.__end__){increment('finish','__end__');nodes.__end__.state='done';nodes.__end__.visits=1;}
+      if(graph.edges.some(edge=>edge.source===event.node&&edge.target==='__end__')&&event.type==='node_end'&&nodes.__end__){increment(event.node,'__end__');nodes.__end__.state='done';nodes.__end__.visits=1;}
     }else{
       if(activeNode&&nodes[activeNode])nodes[activeNode].events.push(event);
       else for(const [id,types] of Object.entries(eventGroups))if(nodes[id]&&types.includes(event.type))nodes[id].events.push(event);
@@ -79,7 +79,7 @@ export function executionSteps(run){
   for(let i=0;i<events.length;i++){
     const event=events[i];let node=event.node,title,group;
     if(event.type==='node_start')activeNode=event.node;
-    if(event.type==='node_start'&&['load_context','load_catalog','recall_memory','compose_prompt','model','finish'].includes(node)){
+    if(event.type==='node_start'&&['load_context','load_catalog','recall_memory','compose_prompt','model','finish','export_plan'].includes(node)){
       let end=i+1;while(end<events.length&&events[end].type!=='node_start'){if(['node_end','node_error'].includes(events[end].type)&&events[end].node===node){end++;break;}end++;}
       group=events.slice(i,end);
       const call=group.find(e=>e.type==='model_request'||e.type==='model')?.call;
@@ -154,6 +154,15 @@ export function renderNodeTrace(container,id,events,run){
       else card.append(traceElement('p','Running · Awaiting result'));
       container.append(card);
     }
+  }else if(id==='export_plan'){
+    const input=events.find(e=>e.type==='plan_export_input');if(input)container.append(traceBlock('Validated calculation input',input.allocation,false));
+    for(const query of events.filter(e=>e.type==='sql_request')){
+      container.append(traceBlock('Reference position SQL',query.sql));
+      const rows=events.find(e=>e.type==='plan_positions'&&e.sql_event===query.seq);if(rows)container.append(traceTable(rows.columns,rows.data));
+    }
+    const output=events.find(e=>e.type==='plan_exported');
+    if(output){container.append(traceBlock('Frontend JSON output',output.plan));const link=traceElement('a','Download plan JSON');link.href=output.url.replace('/api/agent/','/api/cool-sydney/');link.target='_blank';link.rel='noopener';link.download=output.plan.plan_id+'.json';container.append(link);}
+    const skipped=events.find(e=>e.type==='plan_export_skipped');if(skipped)container.append(traceElement('p',skipped.reason));
   }else if(id==='finish'){
     const answer=events.find(e=>e.type==='answer');if(answer)container.append(traceBlock('Final answer returned to the user',answer.text));
   }
@@ -212,7 +221,7 @@ export function createGraphView({svg,detail,status,mermaid,postGraph,flow}){
       if(!terminal){group.append(svgElement('text',{x,y:y+6,'text-anchor':'middle','class':'node-id'},id));group.append(svgElement('text',{x,y:y+28,'text-anchor':'middle','class':'node-count'},`${{idle:'Pending',running:'Running',done:'Complete',error:'Error',unknown:'Unknown'}[s.state]} · ${s.visits} visits · ${(s.duration_ms/1000).toFixed(1)}s`));}
       const choose=()=>{selected=id;stepKey=null;manualSelection=true;showDetails();paintSteps();};group.addEventListener('click',choose);group.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose();}});svg.append(group);
     }
-    status.textContent=run?(view.has_trace?(graph.schema_version===2?'Actual node execution path. Click a node to inspect inputs and outputs.':'This older run used a shared tool node. New runs use separate tool nodes.'):'No node trace for this older run. Showing structure only.'):'Compiled LangGraph structure. Submit a request to see the execution path.';
+    status.textContent=run?(view.has_trace?(graph.schema_version>=2?'Actual node execution path. Click a node to inspect inputs and outputs.':'This older run used a shared tool node. New runs use separate tool nodes.'):'No node trace for this older run. Showing structure only.'):'Compiled LangGraph structure. Submit a request to see the execution path.';
     mermaid.textContent=graph.mermaid||'';
     const save=(run?.events||[]).filter(e=>['memory_save_start','memory_saved','memory_save_error'].includes(e.type)).at(-1);
     postGraph.textContent=`After the graph · Save to Meterless: ${save?(save.type==='memory_saved'?'Complete · '+save.memory_id:save.type==='memory_save_error'?'Failed · '+save.error:'Saving'):run?.remember_request===false?'Not selected':'Pending'}`;

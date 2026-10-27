@@ -24,6 +24,22 @@
 
 `meterless-demo/`는 이 저장소에 포함한 H-MEM 참조 구현용 HTTP/UI 어댑터입니다. Meterless Nightshift 웹 제품과 별개이며, Chat Import 없이 사용할 수 있습니다. Agent Monitor는 8765의 에이전트 API를 로컬 프록시로 읽습니다.
 
+## 팀원용 실행 기록 데모 — API 키 없이 보기
+
+저장된 LLM 실행 6개, 배분 JSON 4개, 관련 기억 6개가 `shared/demo/agent-monitor/`에 포함되어 있습니다. Node.js 22 이상만 있으면 패키지 설치나 데이터 다운로드 없이 실행할 수 있습니다.
+
+```bash
+node scripts/run_agent_monitor_demo.js
+```
+
+**http://127.0.0.1:8766/**에서 Run history를 선택하면 프롬프트, SQL 결과, LangGraph 단계, 배분표와 JSON을 볼 수 있습니다. 이 모드는 저장된 기록을 보여주는 **조회 전용 데모**입니다. 새 LLM 질문, Docker, Zetaris, H-MEM 서버, API 키가 필요하지 않습니다. 8766이 사용 중이면 `PORT=8767 node scripts/run_agent_monitor_demo.js`를 실행하세요.
+
+- 숫자 표·합계·계획 요약은 저장된 계산 결과에서 생성하며, 원본 모델 응답은 실행 상세에 보존합니다.
+- 기록에는 수정 전 오류도 포함됩니다. 출퇴근 요청이 `false`로 남았던 실행을 성공적으로 변경된 계획처럼 재작성하지 않았습니다. 수정된 조건 해석은 새 실시간 실행부터 적용됩니다.
+- 데모 자료는 `node scripts/export_agent_monitor_demo.js`로 현재 완료된 실행에서 다시 만들 수 있습니다. `.env`와 원본 `.notebook/`은 복사하지 않으며, API 키·인증 필드·개인 로컬 경로를 제거합니다. 생성 결과를 검토한 뒤 커밋하세요.
+
+실시간 새 질문과 지도는 아래 일반 설치 절차를 따릅니다.
+
 ## 시작하기
 
 아래 명령은 **이 README가 있는 Git 저장소 루트**에서 실행합니다. 현재 작업 공간에서는 `/Users/suyeongkim/cs/openAgent/.publish/GENAI_WORKS_HACKATHON`입니다. 바깥 `openAgent/cool-sydney`에는 이전 코드가 있으므로 실행 위치를 구분하세요.

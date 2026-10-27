@@ -89,8 +89,8 @@ test('real LangGraph cycles model → SQL tool → model with bounded calls', {s
   let count=0;const {n,events}=nodes({model:async()=>({message:count++===0?{role:'assistant',content:null,tool_calls:[call('execute_readonly_sql',{sql:`SELECT instant_utc, temperature_c, humidity_pct FROM ${db}.weather LIMIT 24`})]}:{role:'assistant',content:'기온 40°C, 가정 기반 검토입니다.'}})});
   const graph=await buildGraph(n),result=await graph.invoke({}, {recursionLimit:20});
   assert.equal(result.calls,2);assert.match(result.answer,/40/);assert.equal(events.filter(e=>e.type==='tool_result').length,1);
-  assert.deepEqual(events.filter(e=>e.type==='node_start').map(e=>e.node),['load_catalog','recall_memory','compose_prompt','model','route_tools','execute_sql','route_tools','model','finish']);
-  assert.equal(events.filter(e=>e.type==='node_end').length,9);
+  assert.deepEqual(events.filter(e=>e.type==='node_start').map(e=>e.node),['load_catalog','recall_memory','compose_prompt','model','route_tools','execute_sql','route_tools','model','finish','export_plan']);
+  assert.equal(events.filter(e=>e.type==='node_end').length,10);
   const structure=await describeGraph();
   assert.equal(structure.source,'compiled-langgraph');assert.ok(!structure.nodes.some(n=>n.id==='tools'));assert.ok(structure.nodes.some(n=>n.id==='execute_sql'));
   assert.deepEqual(structure.edges.filter(e=>e.source==='model').map(e=>e.target).sort(),['finish','route_tools']);

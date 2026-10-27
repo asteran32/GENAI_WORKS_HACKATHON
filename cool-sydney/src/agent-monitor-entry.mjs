@@ -4,7 +4,7 @@ const graphView=createGraphView({svg:$('agent-graph'),detail:$('agent-graph-deta
 let graphStructure=initialGraph,graphRun=null;
 graphView.paint(graphStructure,null);
 $('agent-graph-status').textContent='Compiled graph from the app bundle. Checking the live server.';
-let runId=null, date='2025-12-19', polling=false;
+let runId=null, date='2025-12-19', polling=false,replayMode=false;
 const stateLabel={queued:'Pending',running:'Running',completed:'Complete',failed:'Failed'};
 const memoryVersions=new Map();
 let paintedVersion='';
@@ -70,17 +70,20 @@ async function api(url,body) {
   const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);return result;
 }
 async function refresh() {
-  const s=await api('/api/agent/status');date=s.date||date;$('agent-date').textContent=date;
+  const s=await api('/api/agent/status');replayMode=s.replay_mode===true;date=s.date||date;$('agent-date').textContent=date;
   const selected=s.providers?.[$('agent-provider').value];
-  $('agent-trace-notice').hidden=s.trace_version>=4;
-  $('agent-trace-notice').textContent=s.trace_version>=4?'':'The server on port 8765 is outdated. Restart it to enable conversation context and survey-site allocation.';
+  $('agent-trace-notice').hidden=s.trace_version>=5;
+  $('agent-trace-notice').textContent=s.trace_version>=5?'':'The server on port 8765 is outdated. Restart it to enable conversation context, survey allocation and JSON export.';
   const blockers=[];
+  if(replayMode){blockers.push(`Recorded demo · ${s.snapshot?.runs?.length||0} runs · read-only. Select a run to inspect its prompts, SQL and results.`);$('agent-follow-latest').checked=false;$('agent-run').textContent='Recorded demo';$('agent-show-date').disabled=true;}
+  if(!replayMode){
   if(polling)blockers.push('The previous request is still running.');
   if(!s.conversation_supported)blockers.push('Restart the server on port 8765 to enable follow-up conversations.');
   if(!s.dependency_installed)blockers.push('LangGraph is not installed.');
   if(!selected?.configured)blockers.push(`${$('agent-provider').value==='gemini'?'Gemini':'NVIDIA'} API key is not loaded. Configure .env and restart the server on port 8765.`);
   if(!s.catalog_ready)blockers.push(`Could not read data catalog: ${s.catalog_error}`);
-  $('agent-status').textContent=blockers.length?'Cannot send: '+blockers.join(' '):'Ready · Enter a question and click Send.';
+  }
+  $('agent-status').textContent=replayMode?blockers[0]:blockers.length?'Cannot send: '+blockers.join(' '):'Ready · Enter a question and click Send.';
   $('agent-run').disabled=true;$('agent-run').title=blockers.join(' ');
   if(s.catalog_ready)$('agent-catalog').textContent=JSON.stringify(await api('/api/agent/catalog'),null,2);
   try{graphStructure=await api('/api/agent/graph');graphView.paint(graphRun?.graph||graphStructure,graphRun);}
@@ -99,33 +102,23 @@ function paint(run) {
   $('agent-conditions').textContent=c?`Inventory ${c.devices??'Not set'} units · Commute priority ${c.commute_priority?'On':'Off'} · Water budget ${c.water_budget_l??'Not set'} L`:'';
   $('agent-allocation').replaceChildren();
   if(run.allocation)paintAllocation(run.allocation);
-  $('agent-answer').textContent=run.answer||run.error||'Retrieving evidence…';
+  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation):run.answer||run.error||'Retrieving evidence…';
   $('agent-trace').replaceChildren(...run.events.map(event=>{
     const li=document.createElement('li'),details=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');
     summary.textContent=`${event.seq}. ${event.type}${event.name?' · '+event.name:''} · ${event.at.slice(11,19)}`;
     pre.textContent=JSON.stringify(event,null,2);details.append(summary,pre);li.append(details);return li;
   }));
-  $('agent-remember').disabled=run.status!=='completed';
+  $('agent-remember').disabled=replayMode||run.status!=='completed';
 }
 function paintContinuation(){
   const previous=$('agent-continue').checked&&graphRun?.status==='completed'?graphRun:null;
   $('agent-context-note').textContent=previous?`Continuing: ${previous.question.slice(0,130)} · ${previous.candidates?.site_ids?.length||0} selected sites. Conditions and the last plan carry forward.`:'New conversation. Saved operating preferences may still be recalled from Meterless.';
 }
 $('agent-continue').addEventListener('change',paintContinuation);
-function paintAllocation(plan){
-  const target=$('agent-allocation'),wrap=document.createElement('div');wrap.className='trace-table';
-  const summary=document.createElement('p');summary.textContent=`${plan.total_devices} units · ${plan.total_water_l.toFixed(1)} L planned / ${plan.constraints.water_budget_l??'unlimited'} L budget · ${plan.operating_hours.start_hour}:00–${plan.operating_hours.end_hour}:00 · ${plan.survey_period||'Forecast proxies'}`;
-  const table=document.createElement('table'),head=document.createElement('tr');
-  for(const text of ['Site','Street / segment','Units','Change']){const th=document.createElement('th');th.textContent=text;head.append(th);}table.append(head);
-  for(const row of plan.allocation){const tr=document.createElement('tr');for(const text of [row.site_id??row.id,[row.name,row.description].filter(Boolean).join(' · '),row.devices,row.change==null?'—':`${row.change>=0?'+':''}${row.change}`]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}table.append(tr);}
-  wrap.append(table);target.append(summary,wrap);
-  const schedule=document.createElement('details'),title=document.createElement('summary'),list=document.createElement('ul');title.textContent='Hourly spray schedule';
-  for(const hour of plan.schedule){const li=document.createElement('li');li.textContent=`${String(hour.hour).padStart(2,'0')}:00 · ${hour.active_minutes} active min · ${hour.water_l.toFixed(1)} L`;list.append(li);}schedule.append(title,list);target.append(schedule);
-  const note=document.createElement('p');note.className='hint';note.textContent='Survey-based demand allocation, not measured cooling or verified installation positions. Water assumes 12 L per unit-hour. All units share the hourly spray duration.';target.append(note);
-}
+function paintAllocation(plan){renderCalculatedPlan($('agent-allocation'),plan);}
 $('agent-run').addEventListener('click',async()=>{
   if(!$('agent-question').value.trim()){$('agent-status').textContent='Enter a question.';$('agent-question').focus();return;}
-  if(polling)return;
+  if(polling||replayMode)return;
   $('agent-follow-latest').checked=true;
   polling=true;$('agent-history').disabled=true;$('agent-run').disabled=true;$('agent-remember').disabled=true;$('agent-answer').textContent='Starting run…';$('agent-trace').replaceChildren();paintWorkflow(null);
   try {
@@ -148,7 +141,7 @@ $('agent-provider').addEventListener('change',()=>refresh().catch(error=>{$('age
 $('agent-question').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!$('agent-run').disabled)$('agent-run').click();}});
 $('agent-refresh').addEventListener('click',()=>{monitorFailures=0;refresh().then(()=>scheduleMonitor(0)).catch(error=>{$('agent-status').textContent=error.message;});});
 $('agent-remember').addEventListener('click',async()=>{
-  if(!runId)return;
+  if(!runId||replayMode)return;
   $('agent-remember').disabled=true;
   try {const result=await api(`/api/agent/runs/${runId}/memory`,{text:$('agent-memory').value});paint(await api(`/api/agent/runs/${runId}`));await refreshMemories();$('agent-status').textContent=`Meterless ${result.memory_id} saved. Available to future requests.`;}
   catch(error){$('agent-status').textContent=error.message;}

@@ -100,3 +100,20 @@ test('monitor continues the selected completed run and can explicitly start a ne
   await ids['agent-run'].listeners.click();assert.equal(posts[1].previous_run_id,null);
   await new Promise(r=>setTimeout(r,10));
 });
+
+test('dashboard consumes exported JSON and broadcasts a map update without calling the model',async()=>{
+  const src=path.resolve(__dirname,'../src'),html=fs.readFileSync(path.join(src,'city.html'),'utf8');
+  const ids=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element()]));
+  ids['agent-plan-auto'].checked=true;ids['agent-continue'].checked=true;
+  const plan={schema_version:'cool-sydney.fog-plan.v1',plan_id:'p1',run_id:'p1',analysis_date:'2025-12-19',totals:{units:5,water_l:300},allocations:[{units:2,position:{longitude:151.2,latitude:-33.8}},{units:3,position:null}]};
+  const calls=[],events=[];
+  const context=vm.createContext({document:{hidden:false,getElementById:id=>ids[id],createElement:tag=>new Element(tag),addEventListener:()=>{}},
+    window:{dispatchEvent:e=>events.push(e)},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}},AbortSignal,clearTimeout:()=>{},setTimeout:()=>0,
+    fetch:async(url,options)=>{calls.push({url,method:options.method});return {ok:true,json:async()=>url.endsWith('/plans/latest')?{plan}:url.endsWith('/runs')?[]:{dependency_installed:true,model_configured:true,catalog_ready:true,date:'2025-12-19'}};}});
+  vm.runInContext(fs.readFileSync(path.join(src,'agent-panel.mjs'),'utf8'),context);
+  await new Promise(r=>setImmediate(r));
+  assert.equal(events.length,1);assert.equal(events[0].type,'cool-sydney-plan');assert.equal(events[0].detail.plan_id,'p1');
+  assert.match(ids['agent-plan-status'].textContent,/1 reference markers; 1 sites \(3 units\) need coordinates/);
+  assert.equal(ids['agent-plan-json'].href,'/api/agent/runs/p1/plan');assert.ok(calls.every(c=>c.method==='GET'));
+  await context.loadLatestPlan();assert.equal(events.length,1,'repeated polling must not reset map state');
+});

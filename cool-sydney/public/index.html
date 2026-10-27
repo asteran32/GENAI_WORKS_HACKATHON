@@ -401,6 +401,10 @@ canvas{display:block;max-width:100%}
 .agent-workflow li[data-state="running"] { border-color:#2769b0; background:#e9f1fc; }
 .agent-workflow li[data-state="error"] { border-color:#b74a31; background:#fff0e9; }
 #agent-condition-changes p { border-top:1px solid #d7e1db; padding-top:6px; }
+
+.agent-plan-label{border-style:dashed;pointer-events:auto}.agent-plan-label[data-active=false]{border-color:#64748b;color:#475569}
+
+.allocation-table{overflow-x:auto;margin:12px 0}.allocation-table table{border-collapse:collapse;width:100%;font-size:12px}.allocation-table th,.allocation-table td{padding:7px;border-bottom:1px solid #d5dde2;text-align:left}.allocation-table tfoot{font-weight:700;background:#f1f5f9}
 </style></head><body>
 <header class="topbar">
   <a class="brand" href="/">COOL<span>SYDNEY</span></a><span class="topbar-sep"></span><span class="caption">URBAN SHADE LAB</span>
@@ -550,7 +554,7 @@ canvas{display:block;max-width:100%}
     <p class="hint" id="agent-conditions"></p>
     <div id="agent-allocation"></div>
     <div class="answer" id="agent-answer" aria-live="polite"></div>
-    <p class="hint" id="agent-save-notice"></p>
+    <p class="hint" id="agent-save-notice"></p><hr><label><input id="agent-plan-auto" type="checkbox" checked> Sync exported plans to the map</label><button id="agent-plan-load" type="button" class="btn btn-sm">Load latest plan</button><a id="agent-plan-json" href="#" hidden target="_blank" rel="noopener">Download plan JSON</a><p id="agent-plan-status" class="hint" role="status">Checking for an exported plan…</p>
   </section>
   <section class="block mist-results" aria-labelledby="mist-result-heading">
     <h2 class="eyebrow" id="mist-result-heading">미스트 분사기 · 공기온도 비교</h2>
