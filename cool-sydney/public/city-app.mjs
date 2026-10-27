@@ -304,7 +304,7 @@ function onDateChange() {
 }
 
 async function loadObservations() {
-  if (!cbd || cbd.date !== dateValue()) {
+  if (!cbd) {
     $('weather-result').textContent = '이 날짜의 CBD 자료를 가져오세요.';
     $('counts-result').textContent = '관측일과 선택 날짜가 다릅니다.';
     $('count-list').replaceChildren();
@@ -312,7 +312,7 @@ async function loadObservations() {
     shownObservationKey = `unavailable:${dateValue()}`;
     return;
   }
-  const key = `${cbd.bundle_version}:${cbd.date}:${Math.floor(hour)}`;
+  const key = `${cbd.bundle_version}:${dateValue()}:${Math.floor(hour)}`;
   if (key === shownObservationKey) return;
   shownObservationKey = key;
   $('counts-result').textContent = '선택 시각의 센서 관측값을 읽는 중…';
@@ -325,20 +325,24 @@ async function loadObservations() {
   $('weather-result').textContent = weather
     ? `ERA5 (${weather.grid_lat?.toFixed(2)}, ${weather.grid_lon?.toFixed(2)}) · ${weather.temperature_c?.toFixed(1) ?? '—'}°C · 습도 ${weather.humidity_pct ?? '—'}% · 풍속 ${weather.wind_m_s ?? '—'}m/s · 일사 ${weather.shortwave_w_m2 ?? '—'}W/m²`
     : '해당 시각의 재분석 기상 값 없음';
+  const predictions = observed.forecasts || [];
   const available = observed.counts.filter(c => c.passages != null);
   $('counts-result').textContent = available.length
     ? `${dateValue()} ${hhmm(Math.floor(hour))} 현지시각 · ${available.length}개 센서 · 시간당 통과수 (고유 인원 아님)`
+    : predictions.length ? `${dateValue()} ${hhmm(Math.floor(hour))} · ${predictions.length}곳 보행량 예측 · 90% 과거 오차 구간 · 폭염 영향 미반영`
     : observed.counts_status === 'unavailable-source-ended'
       ? '보행량 자료 없음 · 자동 계수는 2025년 6월 수집 종료 · 0명을 뜻하지 않음'
       : '해당 시각의 유효 자동 계수 없음 · 미관측 구간은 채우지 않음';
   const counts = new Map(observed.counts.map(row => [row.site_id, row]));
+  const predicted = new Map(predictions.map(row => [row.site_id, row]));
   $('count-list').replaceChildren(...observed.sites.map(site => {
-    const row = counts.get(site.id), value = row?.passages;
+    const row = counts.get(site.id), estimate = row?.passages==null ? predicted.get(site.id) : null, value = row?.passages ?? estimate?.predicted_passages;
     const item = document.createElement('div'), label = document.createElement('span'), meter = document.createElement('i'), number = document.createElement('strong');
     item.className = 'count-row';
     label.textContent = site.name || site.id;
     meter.style.setProperty('--level', `${value == null ? 0 : Math.min(100, value / 5000 * 100)}%`);
-    number.textContent = value == null ? '—' : value.toLocaleString('ko-KR');
+    number.textContent = value == null ? '—' : `${estimate?'예측 ':''}${Math.round(value).toLocaleString('ko-KR')}`;
+    if(estimate)item.title=`90% 과거 오차 구간 ${Math.round(estimate.lower90)}–${Math.round(estimate.upper90)}회/시간 · ${estimate.model_id} · 12월 실제 오차 미확인`;
     item.append(label, meter, number);
     return item;
   }));
@@ -433,7 +437,7 @@ function applySunPreview() {
   paintCompass(sun);
   if (scene && snapshot) { scene.setSunLight(sun); scene.setCellsStale(!isVerifiedNow()); }
   paintVerification(); paintComparison(); drawChart();
-  if (cbd && shownObservationKey !== `${cbd.bundle_version}:${cbd.date}:${Math.floor(hour)}` && shownObservationKey !== `unavailable:${dateValue()}`) loadObservations().catch(e => message(e.message, true));
+  if (cbd && shownObservationKey !== `${cbd.bundle_version}:${dateValue()}:${Math.floor(hour)}` && shownObservationKey !== `unavailable:${dateValue()}`) loadObservations().catch(e => message(e.message, true));
   if (microMetadata?.ready && shownMicroKey !== `${microMetadata.version}:${$('micro-date').value}:${Math.floor(hour)}`) loadMicroclimate().catch(e => message(e.message, true));
 }
 function scheduleShade() {
@@ -778,3 +782,5 @@ await work(async () => {
   tone($('nvidia-state'), status.nvidia.configured ? 'warn' : 'idle', status.nvidia.configured ? '키 설정 · 미검증' : '키 설정 필요');
   if (status.gis.ready) await load(); else await importData();
 });
+
+window.addEventListener('cool-sydney-analysis-date',event=>{if(/^20\d{2}-\d{2}-\d{2}$/.test(event.detail)){$('date').value=event.detail;onDateChange();}});

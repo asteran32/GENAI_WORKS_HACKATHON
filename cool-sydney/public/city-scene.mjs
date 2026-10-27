@@ -925,18 +925,20 @@ export class CityScene {
     if (!this.siteValues) return;
     this.clear(this.siteValues);
     const counts = new Map((observed?.counts || []).map(row => [row.site_id, row]));
+    const predictions = new Map((observed?.forecasts || []).map(row=>[row.site_id,row]));
     for (const site of this.countSites) {
-      const row = counts.get(site.id), value = row?.passages;
+      const row = counts.get(site.id), estimate = row?.passages==null ? predictions.get(site.id) : null, value = row?.passages ?? estimate?.predicted_passages;
       site.el.replaceChildren();
       const name = document.createElement('span'), count = document.createElement('strong');
       name.textContent = site.name || site.id;
-      count.textContent = value == null ? '미관측' : `${value.toLocaleString('ko-KR')}회/시간`;
+      count.textContent = value == null ? '미관측' : `${estimate?'예측 ':''}${Math.round(value).toLocaleString('ko-KR')}회/시간`;
       site.el.append(name, count);
+      if(estimate){const interval=document.createElement('small');interval.textContent=`90% 과거 오차 구간 ${Math.round(estimate.lower90)}–${Math.round(estimate.upper90)}`;site.el.append(interval);}
       site.el.dataset.empty = String(value == null);
-      site.el.title = `${site.id} · ${site.name || ''} · ${hourLabel} · ${value == null ? '유효 관측 없음' : `시간당 통과 ${value.toLocaleString('ko-KR')}회`} · 센서 위치`;
+      site.el.title = `${site.id} · ${site.name || ''} · ${hourLabel} · ${value == null ? '유효 관측 없음' : `${estimate?'예측':'관측'} 시간당 통과 ${Math.round(value).toLocaleString('ko-KR')}회`} · 센서 위치`;
       if (value == null) continue;
       const radius = 3 + 13 * Math.sqrt(Math.min(value, 5000) / 5000);
-      const disc = new T.Mesh(new T.CircleGeometry(radius, 40), new T.MeshBasicMaterial({ color: '#d97706', transparent: true, opacity: .72, side: T.DoubleSide, depthWrite: false }));
+      const disc = new T.Mesh(new T.CircleGeometry(radius, 40), new T.MeshBasicMaterial({ color: estimate?'#7c3aed':'#d97706', transparent: true, opacity: .72, side: T.DoubleSide, depthWrite: false }));
       disc.rotation.x = -Math.PI / 2; disc.position.set(site.x, LAYER_Y.walk + .7, -site.y);
       this.siteValues.add(disc);
     }

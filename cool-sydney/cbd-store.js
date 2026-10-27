@@ -169,6 +169,21 @@ function createCBDStore(root, { transport = fetch, env = process.env, gis } = {}
     const disk = await parquet('read',[path.join(bundles,info.bundle_version)],env);
     snapshot = { ...disk, readSource:'local-parquet' }; return snapshot;
   }
+  const datedSnapshots = new Map();
+  async function getForDate(date) {
+    dateWindow(date);
+    if (current()?.date === date) return get();
+    const version = gis?.metadata().version;
+    const matches = fs.readdirSync(bundles).filter(name => /^cbd-[a-f0-9]{16}$/.test(name)).map(name => {
+      const file=path.join(bundles,name,'manifest.json');
+      return fs.existsSync(file) ? {name,manifest:JSON.parse(fs.readFileSync(file,'utf8'))} : null;
+    }).filter(item=>item && item.manifest.date===date && (!version || item.manifest.components.buildings===version))
+      .sort((a,b)=>String(b.manifest.created_at_utc).localeCompare(String(a.manifest.created_at_utc)));
+    if (!matches.length) throw new Error('선택 날짜의 저장된 CBD 묶음이 없습니다. 해당 날짜 자료를 먼저 가져오세요.');
+    const chosen=matches[0].name;
+    if (!datedSnapshots.has(chosen)) datedSnapshots.set(chosen,{...await parquet('read',[path.join(bundles,chosen)],env),readSource:'local-parquet'});
+    return datedSnapshots.get(chosen);
+  }
   async function load(date) {
     const window = dateWindow(date);
     if (inFlight) return inFlight;
@@ -208,6 +223,6 @@ function createCBDStore(root, { transport = fetch, env = process.env, gis } = {}
     })();
     try { return await inFlight; } catch (error) { progress={stage:'error',message:error.message,error:error.message}; throw error; } finally { inFlight=null; }
   }
-  return { get, load, metadata() { const info=current(); return { ready:!!info, loading:!!inFlight, progress, ...(info||{}), area:AREA, readSource:'local-parquet' }; } };
+  return { get, getForDate, load, metadata() { const info=current(); return { ready:!!info, loading:!!inFlight, progress, ...(info||{}), area:AREA, readSource:'local-parquet' }; } };
 }
 module.exports = { SOURCES, bounds, dateWindow, walkQuery, walkingAccess, normalizeWalk, normalizeTrees, normalizeSites, normalizeCounts, normalizeWeather, unavailableCounts, createCBDStore };

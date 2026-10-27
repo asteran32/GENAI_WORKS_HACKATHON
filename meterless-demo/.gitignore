@@ -1,0 +1,5 @@
+node_modules/
+vendor/
+.notebook/
+*.log
+.DS_Store

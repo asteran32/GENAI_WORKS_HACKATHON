@@ -51,7 +51,7 @@ async function explainRun(run, memory, env = process.env, transport = fetch) {
   const r = await jsonRequest(endpoint(env.MODEL_BASE_URL, '/chat/completions'), {
     method: 'POST', headers: { Authorization: `Bearer ${env.MODEL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: env.NEMOTRON_MODEL || 'nvidia/nemotron-3-super-120b-a12b', stream: false, max_tokens: 1400, temperature: .2, reasoning_effort: 'none', messages: [
-      { role: 'system', content: '당신은 도시 접근성 시나리오 검토자입니다. 입력은 모두 합성 데이터입니다. 제공된 계산 결과만 한국어 5문장 이내로 설명하세요. 추천 이유, 남은 미충족 수요, 중요한 가정을 구분하세요. 그늘을 기온 감소량이나 건강 개선으로 바꾸지 마세요. 실제 NSW 시설 또는 인구로 표현하지 마세요. 다른 집단으로 계산한 평균 노출 차이를 개인의 개선량으로 주장하지 마세요. 기억은 과거 제약이며 현재 입력보다 우선하지 않습니다. 설명에 runId를 포함하세요. 새로운 계산 결과나 검증 완료를 꾸며내지 마세요.' },
+      { role: 'system', content: 'You are an urban accessibility scenario reviewer. All inputs are synthetic data. Explain only the supplied calculation results in Korean, using at most five sentences. Distinguish recommendation reasons, remaining unmet demand, and key assumptions. Do not translate shade into air temperature reductions or health improvements. Do not present the inputs as actual NSW facilities or population data. Do not claim that a difference in average exposure calculated across different groups is an improvement for an individual. Memories describe past constraints and must not override current inputs. Include runId in the explanation. Do not invent new calculation results or claims of completed validation.' },
       { role: 'user', content: JSON.stringify({ runId: run.runId, dataKind: run.dataKind, input: run.input, baseline: summarize(run.baseline), best: summarize(run.best), assumptions: run.assumptions, objective: run.objective, memory: memory ? { constraints: memory.constraints, source: memory.source, datasetVersion: memory.datasetVersion } : null }) }
     ] })
   }, transport);
@@ -64,7 +64,7 @@ async function explainGIS(run, env = process.env, transport = fetch) {
   const r = await jsonRequest(endpoint(env.MODEL_BASE_URL, '/chat/completions'), {
     method: 'POST', headers: { Authorization: `Bearer ${env.MODEL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: env.NEMOTRON_MODEL || 'nvidia/nemotron-3-super-120b-a12b', stream: false, max_tokens: 1200, reasoning_effort: 'none', temperature: .2, messages: [
-      { role: 'system', content: '한국어 5문장 이내로 GIS 그림자 시나리오를 설명하세요. 제공된 수치만 인용하고 runId를 포함하세요. 형상은 실제 지도에서 왔지만 높이는 지도 파생값으로 실측 검증되지 않았습니다. 지면 표본의 그늘 비율을 보행자 수, 기온 감소, 냉방 수요, 건강 효과로 환산하지 마세요. 나무·인구·시설 운영 정보는 미연결입니다. AI는 그림자를 계산하거나 검증한 주체가 아닙니다.' },
+      { role: 'system', content: 'Explain the GIS shadow scenario in Korean, using at most five sentences. Cite only the supplied numbers and include runId. Geometry comes from real map data, but heights are map-derived and have not been validated by field measurements. Do not convert the shade fraction of ground samples into pedestrian counts, air temperature reductions, cooling demand, or health effects. Tree, population, and facility operations information is not connected to this explanation. The AI did not calculate or validate the shadows.' },
       { role: 'user', content: JSON.stringify(facts) }
     ] })
   }, transport);

@@ -384,6 +384,23 @@ canvas{display:block;max-width:100%}
   .timeline{padding:var(--s2) var(--s4)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.agent-panel textarea { width:100%; box-sizing:border-box; padding:10px; margin:8px 0; border:1px solid #cad4cd; border-radius:6px; background:#fff; color:#183c30; font:inherit; resize:vertical; }
+.agent-panel .answer { white-space:pre-wrap; overflow-wrap:anywhere; }
+#agent-trace { padding-left:20px; font-size:12px; }
+#agent-trace details { margin:8px 0; }
+#agent-trace pre, #agent-catalog { max-height:320px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+.agent-memory-box { border:1px solid #b9c9c1; border-radius:8px; padding:12px; margin:12px 0; background:#f3f8f5; overflow-wrap:anywhere; }
+.agent-memory-box p { font-size:12px; margin:6px 0; }
+.agent-memory-box details { margin:8px 0; }
+.agent-memory-box pre { max-height:180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+.agent-panel select { width:100%; margin:6px 0 12px; padding:8px; }
+.agent-workflow { list-style:none; padding:0; display:grid; gap:6px; }
+.agent-workflow li { border-left:3px solid #c7d1cc; background:#f2f4f3; padding:8px 10px; font-size:12px; }
+.agent-workflow li[data-state="done"] { border-color:#26805d; background:#e8f5ee; }
+.agent-workflow li[data-state="running"] { border-color:#2769b0; background:#e9f1fc; }
+.agent-workflow li[data-state="error"] { border-color:#b74a31; background:#fff0e9; }
+#agent-condition-changes p { border-top:1px solid #d7e1db; padding-top:6px; }
 </style></head><body>
 <header class="topbar">
   <a class="brand" href="/">COOL<span>SYDNEY</span></a><span class="topbar-sep"></span><span class="caption">URBAN SHADE LAB</span>
@@ -518,6 +535,22 @@ canvas{display:block;max-width:100%}
 </section>
 
 <aside class="panel panel-right" aria-label="분석 결과">
+  <section class="block agent-panel" aria-label="포그 운영 계획">
+    <h2 class="eyebrow">포그 운영 계획</h2>
+    <p class="hint">분석일 <b id="agent-date">2025-12-19</b> · Sydney 현지 시각</p>
+    <p id="agent-status" role="status">준비 중</p>
+    <button type="button" class="btn btn-sm" id="agent-show-date">분석일 지도 보기</button>
+    <label for="agent-devices">사용할 장비 수 (변경할 때 입력)</label>
+    <input type="number" id="agent-devices" min="0" max="10000" step="1" placeholder="예: 50">
+    <label for="agent-question">어떤 계획이 필요한가요?</label>
+    <textarea id="agent-question" rows="4" maxlength="3000" placeholder="예: 포그 50대를 배치해줘. 물은 하루 3000L, 운영은 10시부터 18시까지야."></textarea>
+    <label><input type="checkbox" id="agent-remember-request" checked> 이 조건을 다음 요청에도 사용</label>
+    <div class="button-pair"><button type="button" class="btn btn-sm" id="agent-run">계획 요청</button><button type="button" class="btn btn-sm" id="agent-refresh">다시 확인</button></div>
+    <p class="hint" id="agent-conditions"></p>
+    <div id="agent-allocation"></div>
+    <div class="answer" id="agent-answer" aria-live="polite"></div>
+    <p class="hint" id="agent-save-notice"></p>
+  </section>
   <section class="block mist-results" aria-labelledby="mist-result-heading">
     <h2 class="eyebrow" id="mist-result-heading">미스트 분사기 · 공기온도 비교</h2>
     <div class="mist-probe-card" id="mist-probe-card" hidden aria-live="polite">
@@ -610,9 +643,9 @@ canvas{display:block;max-width:100%}
     <h2 class="eyebrow"><b>09</b> Integrations</h2>
     <div class="integration"><div class="int-head"><b>Zetaris</b><span id="zetaris-state" class="pill" data-tone="idle">미확인</span></div><p>Parquet를 가상 테이블로 등록하고 동일 버전의 행 수를 조회합니다.</p><div class="button-pair"><button class="btn btn-sm" id="register" disabled>등록</button><button class="btn btn-sm" id="verify" disabled>조회</button></div><details><summary>등록 SQL 보기</summary><pre id="sql-plan">GIS 저장 후 생성됩니다.</pre></details><pre id="sql-result" hidden></pre></div>
     <div class="integration"><div class="int-head"><b>NVIDIA Nemotron</b><span id="nvidia-state" class="pill" data-tone="idle">미확인</span></div><p>계산 결과의 가정과 한계를 설명합니다. 요청 시 모델 API를 호출합니다.</p><button class="btn btn-sm" id="explain" disabled>이 결과 설명하기</button><p id="explanation" class="answer"></p></div>
-    <div class="integration"><div class="int-head"><b>Meterless H-MEM</b><span class="pill" data-tone="warn">일부 구현</span></div><p id="memory-state">관찰 조건의 출처·버전·변경 기록을 로컬에 저장합니다. 전체 엔진 통합 전입니다.</p></div>
-    <div class="integration"><div class="int-head"><b>다음 분석에 필요한 자료</b><span class="pill" data-tone="idle">미연결</span></div><p>수목 수관·수고, 지형, ABS 인구, 시설 운영시간과 수용량을 연결해야 냉방 쉼터 접근성과 배치를 계산할 수 있습니다.</p></div>
+    <div class="integration"><div class="int-head"><b>관찰 조건 저장</b><span class="pill" data-tone="warn">로컬 저장</span></div><p id="memory-state">기존 관찰 조건은 로컬에 저장합니다. LangGraph의 운영 기억은 별도 Meterless 8766 서비스에 연결됩니다.</p></div>
+    <div class="integration"><div class="int-head"><b>다음 분석에 필요한 자료</b><span class="pill" data-tone="idle">미연결</span></div><p>12월 보행 수요 예측, 풍향, 장비 실측 성능, 설치 가능 위치·급수·전원 정보를 연결해야 포그 배치와 운영을 검증할 수 있습니다.</p></div>
   </section>
 </aside>
 </main>
-<noscript>이 대시보드는 JavaScript와 로컬 백엔드 서버가 필요합니다.</noscript><script>setTimeout(function(){if(!window.coolSydneyBooted){var m=document.getElementById('message');m.textContent='화면 스크립트를 불러오지 못했습니다. 이전 서버가 실행 중일 수 있습니다. 터미널에서 Ctrl+C 후 bash scripts/start_cool_sydney.sh로 다시 실행하세요.';m.classList.add('error');document.getElementById('server-state').textContent='스크립트 로드 실패';}},8000);</script><script type="module" src="/city-app.mjs"></script></body></html>
+<noscript>이 대시보드는 JavaScript와 로컬 백엔드 서버가 필요합니다.</noscript><script>setTimeout(function(){if(!window.coolSydneyBooted){var m=document.getElementById('message');m.textContent='화면 스크립트를 불러오지 못했습니다. 이전 서버가 실행 중일 수 있습니다. 터미널에서 Ctrl+C 후 bash scripts/start_cool_sydney.sh로 다시 실행하세요.';m.classList.add('error');document.getElementById('server-state').textContent='스크립트 로드 실패';}},8000);</script><script type="module" src="/city-app.mjs"></script><script type="module" src="/agent-panel.mjs"></script></body></html>

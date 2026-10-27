@@ -29,3 +29,5 @@ zetaris-platform*.zip
 /data/**
 !/data/**/
 !/data/**/.gitkeep
+
+node_modules/

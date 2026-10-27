@@ -382,3 +382,20 @@ canvas{display:block;max-width:100%}
   .timeline{padding:var(--s2) var(--s4)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.agent-panel textarea { width:100%; box-sizing:border-box; padding:10px; margin:8px 0; border:1px solid #cad4cd; border-radius:6px; background:#fff; color:#183c30; font:inherit; resize:vertical; }
+.agent-panel .answer { white-space:pre-wrap; overflow-wrap:anywhere; }
+#agent-trace { padding-left:20px; font-size:12px; }
+#agent-trace details { margin:8px 0; }
+#agent-trace pre, #agent-catalog { max-height:320px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+.agent-memory-box { border:1px solid #b9c9c1; border-radius:8px; padding:12px; margin:12px 0; background:#f3f8f5; overflow-wrap:anywhere; }
+.agent-memory-box p { font-size:12px; margin:6px 0; }
+.agent-memory-box details { margin:8px 0; }
+.agent-memory-box pre { max-height:180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+.agent-panel select { width:100%; margin:6px 0 12px; padding:8px; }
+.agent-workflow { list-style:none; padding:0; display:grid; gap:6px; }
+.agent-workflow li { border-left:3px solid #c7d1cc; background:#f2f4f3; padding:8px 10px; font-size:12px; }
+.agent-workflow li[data-state="done"] { border-color:#26805d; background:#e8f5ee; }
+.agent-workflow li[data-state="running"] { border-color:#2769b0; background:#e9f1fc; }
+.agent-workflow li[data-state="error"] { border-color:#b74a31; background:#fff0e9; }
+#agent-condition-changes p { border-top:1px solid #d7e1db; padding-top:6px; }

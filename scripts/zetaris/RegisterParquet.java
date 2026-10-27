@@ -32,7 +32,7 @@ public class RegisterParquet {
             String prefix = "/home/zetaris/customer-data/shared/cool-sydney-registration/" + db.substring(12) + "/";
             for (String line : Files.readAllLines(Paths.get(args[1]), StandardCharsets.UTF_8)) {
                 String[] row = line.split("\t", -1);
-                if (row.length != 4 || !row[0].matches("[a-z_]+") || !names.add(row[0]) ||
+                if (row.length != 4 || !row[0].matches("[a-z][a-z0-9_]*") || !names.add(row[0]) ||
                     !row[1].matches("[0-9]+") || !row[2].equals(prefix + row[0] + ".parquet") ||
                     !row[3].matches("[a-f0-9]{64}")) throw new IllegalArgumentException("Invalid table manifest");
                 byte[] digest = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(Paths.get(row[2])));
@@ -41,7 +41,12 @@ public class RegisterParquet {
                 if (!hex.toString().equals(row[3])) throw new IllegalStateException("Copy checksum mismatch: " + row[0]);
                 tables.add(row);
             }
-            if (tables.size() != 12) throw new IllegalStateException("Expected 12 tables");
+            Set<String> base = new HashSet<>(Arrays.asList("building", "transportation", "water", "landcover", "landuse", "poi", "walk_nodes", "walk_edges", "trees", "pedestrian_sites", "pedestrian_counts", "weather"));
+            Set<String> optional = new HashSet<>(Arrays.asList("agent_catalog", "pedestrian_forecasts", "pedestrian_history", "forecast_backtest"));
+            if (!names.containsAll(base)) throw new IllegalStateException("Missing base data tables");
+            for (String name : names)
+                if (!base.contains(name) && !optional.contains(name) && !name.startsWith("survey_"))
+                    throw new IllegalStateException("Unexpected supplemental table");
             Class.forName("com.zetaris.lightning.jdbc.LightningDriver");
             try (Connection conn = DriverManager.getConnection("jdbc:zetaris:lightning@localhost:10000",
                     required("ZETARIS_ADMIN_EMAIL"), required("ZETARIS_ADMIN_PASSWORD"))) {
@@ -57,7 +62,7 @@ public class RegisterParquet {
                     }
                 }
             }
-            System.out.println("VERIFIED " + db + " 12");
+            System.out.println("VERIFIED " + db + " " + tables.size());
         } catch (Exception error) {
             String message = error.getClass().getSimpleName() + ": " + String.valueOf(error.getMessage());
             String password = System.getenv("ZETARIS_ADMIN_PASSWORD");

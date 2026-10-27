@@ -11,6 +11,8 @@ const { createGISStore } = require('./gis-store');
 const { createCBDStore } = require('./cbd-store');
 const { createMicroclimateStore } = require('./microclimate-store');
 const { createLiveWeather } = require('./live-weather');
+const { createForecastStore } = require('./pedestrian-forecast-store');
+const { createAgent } = require('./agent');
 const { createZetarisGIS } = require('./zetaris-gis');
 class ApiError extends Error { constructor(status, message) { super(message); this.status = status; } }
 function atomicJSON(file, body) { const temp = `${file}.${randomUUID()}.tmp`; fs.writeFileSync(temp, JSON.stringify(body, null, 2), { mode: 0o600 }); fs.renameSync(temp, file); }
@@ -27,6 +29,8 @@ function createService({ directory, env = process.env, transport = fetch, weathe
   const scope = { areaId: data.areaId, datasetVersion: data.version };
   const queue = [], workers = new Set(), explanations = new Map();
   const gis = createGISStore(root, { env, transport }), cbd = createCBDStore(root, { env, transport, gis }), microclimate = createMicroclimateStore(root), liveWeather = createLiveWeather({ transport, now: weatherNow }), zetarisGIS = createZetarisGIS(root, env, transport);
+  const forecasts = createForecastStore(root, env);
+  const agent = createAgent({ root, env, transport });
   let gisRunning = false;
   let running = false, closed = false;
   // Interrupted jobs must not remain stuck in a fake running state after restart.
@@ -61,6 +65,23 @@ function createService({ directory, env = process.env, transport = fetch, weathe
   }
   async function dispatch(method, route, body, searchParams = new URLSearchParams()) {
     if (closed) throw new ApiError(503, '서버가 종료 중입니다.');
+    if (method === 'GET' && route === '/api/pedestrian/forecast') {
+      try { return await forecasts.get(searchParams.get('date')); } catch (error) { throw new ApiError(422, error.message); }
+    }
+    if (route.startsWith('/api/agent/')) {
+      try {
+        if (method === 'GET' && route === '/api/agent/status') return agent.status();
+        if (method === 'GET' && route === '/api/agent/graph') return await agent.graph();
+        if (method === 'GET' && route === '/api/agent/catalog') return agent.catalog();
+        if (method === 'GET' && route === '/api/agent/memories') return await agent.memories();
+        if (method === 'GET' && route === '/api/agent/runs') return agent.list();
+        if (method === 'POST' && route === '/api/agent/runs') return await agent.start(body);
+        const match = route.match(/^\/api\/agent\/runs\/([a-f0-9-]{36})(\/memory)?$/);
+        if (match && method === 'GET' && !match[2]) return agent.get(match[1]);
+        if (match && method === 'POST' && match[2]) return await agent.remember(match[1], body);
+        throw new ApiError(404, '에이전트 경로를 찾을 수 없습니다.');
+      } catch (error) { throw error instanceof ApiError ? error : new ApiError(422, error.message); }
+    }
     if (method === 'GET' && route === '/api/status') return { app: 'cool-sydney', solverVersion: 'gis-shade-0.3', gis: gis.metadata(), cbd: cbd.metadata(), microclimate: microclimate.metadata(), ...integrations.configuration(env) };
     if (method === 'GET' && route === '/api/weather/current') {
       try { return await liveWeather.get(); }
@@ -96,12 +117,15 @@ function createService({ directory, env = process.env, transport = fetch, weathe
         if (method === 'GET' && route === '/api/gis/observations') {
           const instant=searchParams.get('instant'), time=new Date(instant);
           if (!instant || !Number.isFinite(+time) || time.toISOString()!==instant) throw new ApiError(422,'유효한 UTC ISO 시각이 필요합니다.');
-          const { manifest, tables }=await cbd.get(), hour=time.toISOString().slice(0,13);
+          const hour=time.toISOString().slice(0,13);
           const day=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(time).map(p=>[p.type,p.value]));
+          const {manifest,tables}=await cbd.getForDate(`${day.year}-${day.month}-${day.day}`);
           if (`${day.year}-${day.month}-${day.day}`!==manifest.date) throw new ApiError(422,'묶음 날짜의 시각을 조회하세요.');
           const counts=tables.pedestrian_counts.filter(c=>c.instant_utc.startsWith(hour)).map(c=>({ ...c, passages:c.quality==='known-undercount'?null:c.passages }));
+          const prediction=await forecasts.get(manifest.date);
+          const forecastRows=prediction.rows.filter(row=>row.instant_utc.startsWith(hour));
           const weather=tables.weather.find(w=>w.instant_utc.startsWith(hour))||null;
-          return { bundle_version:manifest.bundle_version, instant_utc:time.toISOString(), date:manifest.date, counts_status:manifest.quality?.pedestrian_counts_status || 'observed', counts, weather, sites:tables.pedestrian_sites, limitations:['자동 계수는 2025년 6월에 종료됐습니다. 관측이 없는 구간은 수치를 추정하지 않습니다.','기상은 격자 재분석 자료이며 거리 수준의 실측이 아닙니다.'] };
+          return { bundle_version:manifest.bundle_version, instant_utc:time.toISOString(), date:manifest.date, counts_status:manifest.quality?.pedestrian_counts_status || 'observed', counts, forecasts:forecastRows, forecast_metadata:prediction.manifest||null, weather, sites:tables.pedestrian_sites, limitations:['자동 계수는 2025년 6월에 종료됐습니다. 관측이 없는 구간은 관측값으로 채우지 않습니다. 별도 forecasts는 예측입니다.','기상은 격자 재분석 자료이며 거리 수준의 실측이 아닙니다.'] };
         }
         if (method === 'POST' && route === '/api/gis/routes') {
           const { validateInput }=require('./cbd-route'), bundle=await cbd.get(), map=await gis.get();
@@ -205,6 +229,6 @@ function createService({ directory, env = process.env, transport = fetch, weathe
     }
     throw new ApiError(404, 'API 경로를 찾을 수 없습니다.');
   }
-  return { dispatch, root, close() { closed = true; for (const worker of workers) worker.terminate(); } };
+  return { dispatch, root, close() { closed = true; agent.close(); for (const worker of workers) worker.terminate(); } };
 }
 module.exports = { createService, ApiError };

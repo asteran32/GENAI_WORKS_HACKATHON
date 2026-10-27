@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>LLM Monitor · Meterless × LangGraph</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="Memory Notebook 홈"><span class="brand-icon" aria-hidden="true">m<span>✳</span></span><span>Meterless <b>H-MEM</b></span></a>
+      <span id="connection" class="connection"><i></i><span>연결 확인 중</span></span>
+    </header>
+    <nav class="tabs monitor-tabs" aria-label="운영 화면"><button id="show-monitor" aria-pressed="true">LLM 모니터 · LangGraph</button><button id="show-notebook" aria-pressed="false">Meterless 기억 관리</button></nav>
+    <section id="monitor-screen" aria-label="LLM 모니터링"><p class="view-description">8765에서 들어온 사용자 요청을 자동으로 추적합니다. 이전 실행을 선택하면 해당 실행의 근거와 기억을 볼 수 있습니다.</p><iframe id="monitor-frame" src="/agent-monitor" title="LangGraph 실행 및 Meterless 기억 모니터"></iframe></section>
+    <main id="notebook-screen" hidden>
+      <section class="intro">
+        <div><p class="eyebrow">YOUR LOCAL MEMORY SPACE</p><h1>기억을 쌓고,<br>다음 결정에 이어 쓰세요.</h1><p class="intro-copy">조건을 저장하고, 필요한 기억과 그 출처를 다시 찾아보세요.</p></div>
+        <div class="intro-note"><span class="note-star" aria-hidden="true">✳</span><p>작은 조건 하나도<br>잊히지 않도록.</p><span>MEMORY NOTEBOOK / 01</span></div>
+      </section>
+      <div id="error" class="error" role="alert" hidden></div>
+      <section class="search-panel" aria-label="기억 검색">
+        <form id="search-form">
+          <label for="query" class="eyebrow">RECALL A MEMORY</label>
+          <div class="search-row"><span class="search-icon" aria-hidden="true">⌕</span><input id="query" type="search" placeholder="어떤 조건을 기억하고 있나요?" maxlength="1000" required><button class="primary" type="submit">검색 <span aria-hidden="true">↗</span></button></div>
+          <div class="search-options"><label for="search-mode">검색 방식</label><select id="search-mode"><option value="ranked">H-MEM 순위 검색</option><option value="literal">원문 포함 · 한국어 지원</option></select><span id="search-hint">순위 검색은 영문 키워드를 사용해요.</span></div>
+        </form>
+        <button type="button" id="example-query" class="example">예시: accessibility constraints <span aria-hidden="true">↗</span></button>
+      </section>
+      <div class="workspace">
+        <section class="collection" aria-labelledby="collection-title">
+          <div class="section-head"><div><p class="eyebrow">THE COLLECTION</p><h2 id="collection-title">나의 기억 <span id="memory-count" class="count">0</span></h2></div><button id="reload" class="quiet" type="button">새로고침 ↻</button></div>
+          <nav class="tabs" aria-label="기억 보기"><button id="tab-list" data-view="list" aria-pressed="true">기억 목록</button><button id="tab-search" data-view="search" aria-pressed="false">검색 결과</button><button id="tab-history" data-view="history" aria-pressed="false">전체 이력</button></nav>
+          <p id="view-description" class="view-description" aria-live="polite">기억을 불러오는 중이에요.</p>
+          <div id="items" class="items"></div>
+        </section>
+        <aside class="detail" aria-labelledby="detail-title">
+          <div class="section-head"><div><p id="detail-eyebrow" class="eyebrow">CAPTURE SOMETHING</p><h2 id="detail-title">새로운 조건</h2></div><button id="new-memory" class="quiet" type="button">＋ 새 기억</button></div>
+          <form id="memory-form">
+            <label for="content">기억할 조건</label><textarea id="content" rows="5" maxlength="4000" placeholder="예: 휠체어 접근 가능한 시설만, 도보 10분 이내" required></textarea>
+            <label for="source">출처</label><input id="source" type="text" maxlength="200" value="사용자 직접 입력" placeholder="예: 사용자 요청, 팀 회의" required>
+            <div class="field-row"><div><label for="confidence">신뢰도 <span>0~1</span></label><input id="confidence" type="number" min="0" max="1" step="0.01" value="0.7" required></div><div><label for="tags">태그 <span>쉼표로 구분</span></label><input id="tags" type="text" placeholder="접근성, 보행"></div></div>
+            <p id="detail-meta" class="detail-meta">조건과 출처를 함께 남기세요.</p>
+            <button id="save-memory" type="submit" class="primary save">조건 저장 <span aria-hidden="true">＋</span></button>
+          </form>
+          <section class="audit" aria-labelledby="audit-title"><div class="audit-heading"><h3 id="audit-title">기억의 발자취</h3><span id="audit-count">0건</span></div><div id="audit-items"><p class="muted">기억을 선택하면 생성·조회·변경 이력이 보여요.</p></div></section>
+        </aside>
+      </div>
+      <footer><span>✳ 로컬 H-MEM 참조 엔진</span><span>기억은 이 컴퓨터에 저장됩니다 · 외부 모델 호출 없음</span></footer>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
