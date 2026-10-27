@@ -1,145 +1,224 @@
-# Cool Sydney · Hackathon
+# Cool Sydney
 
-현재 개발 대상은 시드니 실제 GIS를 이용한 3D 그림자 대시보드입니다. **실행·데이터·검증 상태는 [Cool Sydney README](cool-sydney/README.md)**에서 확인합니다.
+시드니 CBD의 공간·보행·기상 데이터를 연결해 쿨링 포그의 배치와 운영 조건을 검토하는 해커톤 프로젝트입니다. 3D 지도에서 그늘과 가정 기반 냉각 효과를 비교하고, 에이전트에 자연어로 후보 구간·장비 수·운영 시간·물 예산을 요청할 수 있습니다.
+
+에이전트는 **LangGraph**로 실행되며 **Zetaris**에서 근거 데이터를 조회하고 **Meterless H-MEM**에서 사용자 조건을 기억합니다. 모델 공급자는 Gemini 또는 NVIDIA Nemotron을 선택합니다. 결과는 수요에 비례한 배분·운영 **검토안**이며, 현장 검증을 거친 설치 설계나 장비 제어 명령은 아닙니다.
+
+## 주요 기능
+
+- **3D 지도와 그늘:** 실제 GIS 건물·도로·녹지, 보행망·수목·계수 지점을 표시하고 날짜·시각별 건물/가정 기반 수관 그림자와 보행 노출을 비교합니다.
+- **포그 시뮬레이션:** FEC-MP003 장비를 지도에 수동 배치하고 설치 전·후 공기온도와 물 사용량을 비교합니다. 유량·증발 비율·혼합 공기량·영향 반경은 시나리오 가정입니다.
+- **근거 기반 에이전트:** 등록된 메타 카탈로그에 맞춰 읽기 전용 SQL을 작성하고, 조회·예측·배분·냉각 계산 결과를 검토해 답합니다.
+- **후속 요청:** 이전 실행의 검증된 후보 지점과 운영 조건을 이어받아 장비 수, 출퇴근 우선순위, 물 예산을 변경합니다.
+- **기억과 실행 모니터:** 사용자 조건의 저장·검색·변경 이력, 실제 그래프 경로, 모델 요청/응답, SQL과 반환 행을 확인합니다.
+- **보행 근거:** 자동 계수 관측, 정기 조사일의 시간별 계수, 별도로 학습한 예측을 구분해 사용합니다.
+
+## 서비스 구성
+
+| 화면 | 주소 | 용도 |
+| --- | --- | --- |
+| Cool Sydney | http://127.0.0.1:8765/ | 3D 지도, 포그 비교, 에이전트 요청 |
+| H-MEM 로컬 UI | http://127.0.0.1:8766/ | 기억 목록·조건 저장/수정·검색·이력 |
+| Agent Monitor | http://127.0.0.1:8766/agent-monitor | 실행별 그래프·타임라인·입출력 검사 |
+| Zetaris | http://localhost:3000/ | 별도로 설치한 데이터 플랫폼의 SQL 화면 |
+
+`meterless-demo/`는 이 저장소에 포함한 H-MEM 참조 구현용 HTTP/UI 어댑터입니다. Meterless Nightshift 웹 제품과 별개이며, Chat Import 없이 사용할 수 있습니다. Agent Monitor는 8765의 에이전트 API를 로컬 프록시로 읽습니다.
+
+## 시작하기
+
+아래 명령은 **이 README가 있는 Git 저장소 루트**에서 실행합니다. 현재 작업 공간에서는 `/Users/suyeongkim/cs/openAgent/.publish/GENAI_WORKS_HACKATHON`입니다. 바깥 `openAgent/cool-sydney`에는 이전 코드가 있으므로 실행 위치를 구분하세요.
+
+필요 환경:
+
+- Node.js **22.19 이상**, npm
+- Python과 PyArrow (`cool-sydney/requirements.txt`)
+- 최초 의존성·공개 데이터 수집을 위한 인터넷 연결
+- 에이전트 SQL 실행 시 Docker, 정상 실행 중인 Zetaris driver, 등록 시 JDK의 `javac`
+
+### 1. 의존성과 설정
 
 ```bash
-bash scripts/start_cool_sydney.sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r cool-sydney/requirements.txt
+npm --prefix cool-sydney ci
 ```
 
-실행 후 http://127.0.0.1:8765 에서 GIS를 가져오면 `data/cool-sydney/processed/`에 GeoParquet로 저장됩니다. Zetaris에는 이 폴더를 읽기 전용으로 마운트해 가상 테이블로 등록합니다. 실제 서비스 연결과 브라우저 화면 확인은 세션의 포트·네트워크·Docker 권한 제한으로 아직 완료하지 못했습니다.
+기존 `.env`가 없으면 `.env.example`을 `.env`로 복사하고 사용할 공급자의 키를 입력합니다. 앱 설정과 Zetaris 설치 번들의 `.env`는 별도입니다.
 
-아래는 초기 환경 설정 및 이전 AR 아이디어의 기록입니다.
+| 변수 | 용도 |
+| --- | --- |
+| `MODEL_PROVIDER` | `gemini` 또는 `nvidia`; 기본 `gemini` |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Gemini 인증·모델; 모델 기본값은 `.env.example` 참고 |
+| `MODEL_API_KEY`, `MODEL_BASE_URL`, `NEMOTRON_MODEL` | NVIDIA 인증·엔드포인트·모델 |
+| `METERLESS_BASE_URL` | 기억 서비스 주소; 기본 `http://127.0.0.1:8766` |
+| `ZETARIS_DRIVER_CONTAINER` | 에이전트 JDBC 도구가 사용하는 컨테이너; 기본 `zetaris-driver-1` |
+| `ZETARIS_REST_URL`, `ZETARIS_ORG_ID`, `ZETARIS_API_KEY`, `ZETARIS_SQL_PATH` | 대시보드의 기존 REST 등록·조회 기능 |
+| `COOL_SYDNEY_PORT` | 대시보드 포트; 기본 `8765` |
+| `COOL_SYDNEY_PYTHON` | PyArrow가 설치된 Python 실행 파일 경로 |
 
-## 초기 환경 설정 기록
+앱 서버의 설정 우선순위는 셸 환경 변수 → 저장소 `.env` → `.publish` 작업 공간의 바깥 `.env`입니다. 공급자별 키는 서버에서만 사용합니다. `.env`, 데이터, `.notebook/`, `node_modules/`, 로컬 플랫폼 번들은 Git에서 제외합니다.
 
-PDF의 Zetaris 데이터 계층과 Nemotron 모델 계층을 점검하는 Python 환경입니다. `.venv`와 Python 의존성 설치, Zetaris ZIP 압축 해제, 플랫폼 설정 검증까지 완료했고, 사용자가 Docker 레지스트리의 `Login Succeeded`를 확인했습니다. Zetaris 컨테이너 실행, Cursor 설치·로그인, API 키 입력 후 실제 연결 검사를 완료해야 합니다.
+### 2. 지도와 분석일 자료 준비
 
-팀원에게 전달할 원본 PDF와 `zetaris-platform.zip`은 `shared/` 폴더에 모았습니다. 플랫폼 ZIP은 Git에서 제외하고 파일로 직접 전달합니다. 실행용 `zetaris-platform/`과 비밀번호를 담은 `.env`는 각자의 컴퓨터에서 관리합니다.
+```bash
+bash scripts/run_dashboard.sh --date 2025-12-19
+```
 
-AR 조립 시스템 설계는 [인터랙티브 HTML 아키텍처](shared/ikea-ar-architecture.html)와 [Markdown 아키텍처](shared/ikea-ar-architecture.md)에서 확인합니다. HTML은 브라우저에서 구성 요소별 상세와 조립 상태 복원 예시를 볼 수 있고, Markdown은 GitHub에서 Mermaid 구조도와 함께 읽을 수 있습니다. 웹 우선 구현, 앱 확장, 모델별 역할, 로컬 저장소와 전체 제품 확장 계획을 담았습니다.
+스크립트가 Python 환경을 확인하고 GIS·해당 날짜의 CBD 자료를 수집/검증한 뒤 웹서버를 시작합니다. 완료 후 http://127.0.0.1:8765/ 를 엽니다. 처음에는 원본 다운로드와 Parquet 생성에 시간이 걸립니다. 재실행 시 저장한 캐시와 검증된 묶음을 재사용합니다.
 
-도시 폭염·냉방 쉼터 주제는 [Cool Sydney HTML 구조도](shared/cool-sydney-architecture.html)와 [Markdown 아키텍처](shared/cool-sydney-architecture.md)에 별도로 정리했습니다. 건물·나무 GIS, 시간별 그늘·보행 접근성, Zetaris·Meterless H-MEM·NVIDIA 모델의 역할과 현재 구현 상태를 담았습니다.
+날짜를 생략하면 기본 수집일은 `2025-01-15`입니다. `--map-only`는 CBD 자료 준비를 생략합니다. 에이전트의 분석일은 **활성 카탈로그에 고정**되므로 지도에서 날짜만 바꾼다고 에이전트 근거 날짜가 바뀌지는 않습니다.
 
-## 웹 우선 AR 구조와 로컬 데이터
+이미 자료가 준비됐다면 아래 명령으로 서버만 시작할 수 있습니다.
 
-휴대폰·PC에서 같은 React/TypeScript 웹을 사용하고, 기본 안내는 카메라 영상 위 Canvas로 표시하는 설계입니다. 폰 단독 촬영과 QR 페어링 + WebRTC로 폰 카메라를 PC에 연결하는 모드를 지원하도록 설계했습니다. 이후 Capacitor로 웹을 iOS/Android 앱에 포함하고, 정밀 공간 AR이 필요하면 별도 ARKit/ARCore 플러그인과 네이티브 렌더러를 추가합니다. Unity는 필수가 아니며, 앱 패키징만으로 정밀 AR이 생기지는 않습니다.
+```bash
+node cool-sydney/server.js
+```
 
-파일 저장소는 프로젝트 루트의 `data/`입니다. PDF·ZIP 배포 원본은 기존 `shared/`에 유지합니다.
+거리 기온 실측은 별도 선택 자료입니다. 원본 CSV를 준비한 후 `npm --prefix cool-sydney run import:microclimate`로 가져옵니다. [지도·데이터 상세 안내](cool-sydney/README.md)를 참고하세요.
+
+### 3. Zetaris에 등록
+
+Zetaris 로컬 플랫폼과 로그인/레지스트리 정보는 별도로 준비해야 합니다. 번들은 Git에 포함하지 않습니다. 이 작업 공간의 번들은 바깥 `openAgent/zetaris-platform`에 있습니다. 플랫폼을 시작하고 driver가 healthy 상태인지 확인하세요.
+
+분석일 자료가 준비되면 다른 터미널의 저장소 루트에서 실행합니다.
+
+```bash
+python3 scripts/register_zetaris.py --date 2025-12-19 --sync
+```
+
+기본 GIS/CBD 테이블과 저장된 선택 자료·메타 카탈로그를 등록합니다. 순서는 파일 체크섬 확인 → driver로 복사 → 테이블 등록 → SQL 행 수 검증입니다. 모든 검증이 성공한 뒤 `catalog/current.json`을 새 등록 버전으로 전환합니다. 저장되지 않은 예측·정기 조사 자료는 `SKIP`으로 표시됩니다.
+
+- 설치 번들을 자동으로 찾지 못하면 `--platform /절대경로/zetaris-platform`을 지정합니다.
+- driver 이름이 다르면 등록 명령의 `--container`와 앱의 `ZETARIS_DRIVER_CONTAINER`를 같은 값으로 맞춥니다.
+- `--prepare-only`를 추가하면 등록 계획과 SQL만 만들고 활성 카탈로그를 전환하지 않습니다.
+
+**에이전트 SQL은 Docker 안의 JDBC 연결**을 사용합니다. 대시보드의 기존 REST API 등록·조회와 다른 경로입니다. 클라우드 포털의 AWS Credentials·Clusters 화면은 이 로컬 실행 화면이 아닙니다.
+
+### 4. H-MEM과 모니터 시작
+
+처음 실행하는 컴퓨터에서는 공식 참조 엔진을 받아야 합니다.
+
+```bash
+npm --prefix meterless-demo ci
+npm --prefix meterless-demo run setup
+```
+
+엔진이 `meterless-demo/vendor/hmem`에 준비되면 별도 터미널에서 실행합니다.
+
+```bash
+COOL_SYDNEY_PROJECT_ROOT="$PWD" npm --prefix meterless-demo start
+```
+
+환경 변수는 Agent Monitor가 **현재 저장소의** 화면 파일을 읽도록 지정합니다. 기본 프록시 대상은 `http://127.0.0.1:8765`입니다. 기억 UI만 쓰려면 Cool Sydney 서버 없이도 사용할 수 있습니다.
+
+H-MEM 엔진과 기본 UI에는 모델 API 키가 필요하지 않습니다. 상태는 해당 서비스 디렉터리의 `.notebook/`에 저장됩니다. 기존 바깥 `openAgent/meterless-demo`에서 실행하던 기억도 그 디렉터리에 남아 있으며, Git clone으로 이전되지 않습니다.
+
+한국어는 UI의 **원문 포함 검색**을 사용하세요. H-MEM 참조 엔진의 순위 검색은 결정적 해시 임베딩을 사용하며 한국어 의미 검색을 제공하지 않습니다. 에이전트는 지역 prefix로 사용자 기억 최대 12개를 조회합니다. 서비스가 꺼져 있으면 기억을 만들지 않고 `unavailable`을 기록한 뒤 진행합니다.
+
+## 에이전트 데모
+
+자료 등록과 모델 설정을 마친 후 대시보드나 Agent Monitor에서 요청합니다. 모니터의 **Continue the selected run**을 켜면 선택한 완료 실행을 이어갑니다.
+
+1. “2025년 12월 19일 기준으로 출퇴근 시간대 보행량이 많은 조사 지점 10곳을 찾아줘.”
+2. “그 10곳에 포그 50대를 배분해줘. 운영은 10시부터 18시까지, 물 예산은 3000L야.”
+3. “출퇴근 시간을 우선해줘.”
+4. “장비를 30대로 줄이고 물 예산도 1500L로 바꿔줘.”
+
+후속 요청은 대화의 검증된 지점 ID·조사 기간·조건을 유지하고 명시한 조건만 변경합니다. `remember_request`를 켜거나 피드백을 저장하면 조건과 출처를 H-MEM에도 남깁니다. 이전 실행은 `previous_run_id`로 연결하고 디스크에서 복구하므로 기억 서비스 장애와 대화 이력을 구분합니다.
+
+정기 조사 배분에는 동일한 조사 기간의 지점별 시간 계수를 사용합니다. 후보 지점 수보다 장비가 적으면 모든 지점에 한 대씩 배정된다고 보장하지 않습니다. 출퇴근 가중치는 운영 시간 안의 08~10시·17~19시에 적용합니다. 가중치를 바꿔도 운영 시간을 임의로 늘리지 않습니다.
+
+모니터에서는 실행별로 질문, 적용 조건, 호출한 노드, 프롬프트, SQL, 반환 행, 계산 결과, 오류와 답변을 확인할 수 있습니다. 이 화면은 모델의 내부 추론을 표시하는 기능이 아닙니다.
+
+## 구조
+
+```mermaid
+flowchart TD
+  D[공개 GIS·보행·기상 자료] --> P[로컬 Parquet·버전 manifest]
+  P --> MAP[Three.js 지도·그늘·포그 비교]
+  P --> Z[Zetaris 가상 테이블·메타 카탈로그]
+  Q[사용자 요청·이전 실행] --> C[카탈로그·조건·기억 로드]
+  H[Meterless H-MEM] --> C
+  C --> M[Gemini / NVIDIA Nemotron]
+  M --> T{LangGraph 도구 라우팅}
+  T --> SQL[검증된 SELECT → Zetaris JDBC]
+  T --> CALC[예측 조회·수요 배분·냉각 계산]
+  SQL --> M
+  CALC --> M
+  M --> R[답변·실행 기록]
+  R -->|사용자가 기억 선택| H
+  R --> MON[Agent Monitor]
+```
+
+| 구성 요소 | 코드 |
+| --- | --- |
+| 웹서버·API·로컬 작업 | [`cool-sydney/server.js`](cool-sydney/server.js), [`service.js`](cool-sydney/service.js) |
+| 지도·포그·경로 화면 | [`cool-sydney/src/`](cool-sydney/src/), [`build.js`](cool-sydney/build.js) |
+| LangGraph·대화 맥락 | [`agent.js`](cool-sydney/agent.js), [`agent-context.js`](cool-sydney/agent-context.js) |
+| SQL 경계·연결 | [`agent-sql.js`](cool-sydney/agent-sql.js), [`agent-connectors.js`](cool-sydney/agent-connectors.js) |
+| 배분·예측 | [`fog-allocation.js`](cool-sydney/fog-allocation.js), [`agent-forecast.js`](cool-sydney/agent-forecast.js) |
+| 데이터 등록·모델 학습 | [`scripts/`](scripts/) |
+| 기억 UI·모니터 프록시 | [`meterless-demo/`](meterless-demo/) |
+
+모델 호출은 실행당 최대 **4회**, 도구 실행은 최대 **6회**, 모델 요청당 **60초**, 전체 실행은 **3분**으로 제한합니다. SQL은 카탈로그에 있는 테이블의 단일 SELECT, 최대 3개 테이블·100행으로 제한하며 쓰기·CTE·서브쿼리·외부 파일 함수 등을 거부합니다. 오류는 호출 한도 안에서 모델에 반환합니다.
+
+## 선택 데이터 준비
+
+정기 보행 조사와 자동 센서 기반 예측은 서로 다른 근거입니다. 필요한 자료를 저장한 뒤 `--sync`를 다시 실행하세요.
+
+```bash
+# 정기 조사 지점·시간별 계수 수집
+python3 scripts/fetch_walking_surveys.py
+
+# 자동 계수 이력 수집 및 분석일 예측 생성
+python3 scripts/fetch_pedestrian_history.py
+python3 scripts/train_pedestrian_forecast.py --date 2025-12-19
+
+# 준비된 자료를 등록하고 카탈로그 갱신
+python3 scripts/register_zetaris.py --date 2025-12-19 --sync
+```
+
+예측은 별도 `pedestrian_forecasts` 테이블과 모델·검증 보고서에 보관하며 관측 `pedestrian_counts`를 덮어쓰지 않습니다. 조사 날짜는 분석일 이전의 적절한 평일/주말 기간을 선택해야 합니다.
+
+## 데이터와 한계
+
+기본 저장 위치는 `data/cool-sydney/`입니다.
 
 ```text
-data/
-├── raw/manuals/       # IKEA 조립 PDF
-├── raw/products/      # 상품 자료·사진
-├── processed/pages/   # 페이지 이미지·crop
-├── processed/graphs/  # 추출·검수용 JSON
-├── assets/models/     # GLB/USDZ·연결점
-└── evaluation/        # 실물 평가 자료
+data/cool-sydney/
+├── raw/                   # 원본 응답·타일·CSV
+├── processed/             # GIS/CBD/조사/예측 Parquet·manifest
+├── catalog/current.json   # 검증 후 활성화한 에이전트 메타 카탈로그
+├── zetaris-registration/  # 등록 SQL·계획·검증 결과
+├── agent-runs/            # 대화·SQL·도구·오류·답변 기록
+└── runs/                  # 지도·그늘·경로 계산 결과
+meterless-demo/.notebook/   # H-MEM 기억·감사 이력 (별도 서비스)
 ```
 
-파일은 제품·개정판별로 나누고, 경로·해시·관계·승인된 지식과 세션은 PostgreSQL에 기록하는 설계입니다. Zetaris는 PostgreSQL을 조회하며 브라우저에는 백엔드 Asset API로 파일을 제공합니다. 백엔드와 워커를 컨테이너로 만들 때 `./data:/app/data` 마운트를 적용합니다. 데이터 내용은 Git에서 제외하고 `.gitkeep`으로 폴더 구조만 공유합니다. 현재는 설계와 폴더만 준비되어 있으며 웹앱·Asset API·DB 연결은 아직 구현하지 않았습니다.
+- 기상 모델값, 과거 센서 실측, 조사일 계수와 통계 예측의 날짜·출처를 구분합니다. 미관측은 0명이 아닙니다. 통과 횟수는 고유 보행자 수가 아닙니다.
+- 자동 센서 4곳의 예측을 전체 CBD 거리의 수요 실측으로 해석하지 않습니다. 정기 조사 배분도 해당 조사일 수요에 비례한 시나리오입니다.
+- 포그 모델은 가정에 따른 공기 냉각과 물 사용량을 계산합니다. 거리별/지면/체감온도 실측, CFD, 인증된 장비 성능, 전역 최적 배치를 제공하지 않습니다.
+- 지도 파생 건물 높이, 원형 수관 가정, 보행망 연결과 서로 다른 수집 시점에 불확실성이 있습니다. 무장애 경로 후보와 설치 가능성은 현장 검증이 필요합니다.
+- H-MEM은 JSON 저장소와 해시 기반 검색을 쓰는 참조 구현입니다. 단일 사용자 데모용이며 CLI와 UI에서 동시에 쓰지 마세요.
 
-## Python 환경
+## 검증
 
 ```bash
-cd /Users/suyeongkim/cs/openAgent
-bash scripts/setup.sh
-source .venv/bin/activate
+npm --prefix cool-sydney test
+python3 -m unittest discover -s scripts/tests
+npm --prefix meterless-demo test
 ```
 
-`requirements.txt`는 이 환경에서 설치한 버전을 고정합니다. 기존 패키지 캐시로 오프라인 설치했으며, 재설치 스크립트는 로컬 캐시를 우선 사용합니다. `.env`는 권한 600으로 만들고 기존 값은 보존합니다. `.gitignore`는 환경 파일, 가상환경, 플랫폼 번들을 제외합니다.
+테스트는 GIS/Parquet 왕복·데이터 품질, 물리 계산과 물 예산, 읽기 전용 SQL 경계, 실제 LangGraph 순환, 후속 요청·기억·모니터 화면 로직을 확인합니다. H-MEM 테스트는 참조 엔진을 준비한 후 임시 저장소에서 실행합니다. LangGraph가 설치되지 않으면 일부 그래프 테스트는 skip됩니다.
 
-## Cursor 설치
+외부 모델·Zetaris 응답을 모의로 대체하는 테스트와 실제 서비스 연결은 별도입니다. 설치·키·네트워크가 준비된 환경에서 `/api/agent/status` 및 실제 실행의 SQL·도구 결과를 확인하세요. 코드에는 연결 구현이 있지만 상태 응답의 `external_connections_verified`는 항상 `false`이며 자동 검증 완료 신호가 아닙니다.
 
-[공식 다운로드](https://cursor.com/download)에서 칩에 맞는 버전을 받아 설치하고 로그인합니다. ** → 이 Mac에 관하여**에서 Apple M 시리즈이면 **Mac (ARM64)**, Intel이면 **Mac (x64)**입니다. **Mac Universal**은 양쪽을 지원합니다. 현재 작업 터미널은 `x86_64`로 표시되지만 실제 하드웨어 칩 정보는 확인되지 않아 다운로드 선택 근거로 단정할 수 없습니다. Cursor에서 이 프로젝트를 열고 Python 인터프리터로 `.venv/bin/python`을 선택합니다. `curl https://cursor.com/install -fsS | bash`는 터미널용 Cursor CLI 설치 명령이며 데스크톱 앱 설치와 별개입니다.
+## 참고 문서
 
-PDF의 Build 검증은 Cursor Agent에서 Composer 또는 Grok를 선택하고 `hello`를 출력하는 Python 파일을 생성·실행하는 것입니다. 크레딧 지급 방법은 PDF에 없으므로 주최 측 안내를 확인합니다. NVIDIA/Meterless 키는 프로젝트 실행용 `.env`에 입력합니다.
+- [지도·데이터와 모델 상세](cool-sydney/README.md)
+- [H-MEM 예제·로컬 UI](meterless-demo/README.md)
+- [초기 Cool Sydney 아키텍처](shared/cool-sydney-architecture.md) — 구현 전 설계 기록
+- [초기 IKEA AR 아이디어](shared/ikea-ar-architecture.md) — 현재 앱과 별도의 설계 기록
+- [행사 참가 안내](shared/welcome_guide.txt)
 
-## Zetaris 설치
-
-[Zetaris 가입](https://cloud.enterprise.zetaris.com/register) 후 **Run locally**에서 `zetaris-platform.zip`과 레지스트리 로그인 정보를 받습니다. 다운로드가 보이지 않으면 주최 측이나 Zetaris 지원에 접근 권한을 요청합니다. 세부 절차는 [공식 설치 안내](https://github.com/zetaris/getting-started/blob/main/docs/install/updated_zetaris_installation_guide.md)를 따릅니다.
-
-ZIP은 이미 `zetaris-platform/`에 압축을 풀었습니다. 관리자 이메일은 `admin@zetaris.com`, 조직은 `openAgent`이며, 새로 생성한 관리자 비밀번호는 `zetaris-platform/.env`의 `ZETARIS_ADMIN_PASSWORD`에서 확인합니다. 관리자 이메일·조직을 바꾸려면 최초 실행 전에 변경합니다. 프로젝트 `.env`의 선택적 `ZETARIS_USERNAME`, `ZETARIS_PASSWORD`도 현재 관리자 값으로 맞췄습니다.
-
-Docker Desktop을 실행합니다. 사용자 터미널의 preflight 결과에서 Docker 27.1.1, Compose 2.29.1, x86_64, CPU 16개, 디스크 여유 547GB가 확인됐습니다. Docker 설정은 메모리 8GB이며 preflight는 사용 가능 메모리를 7GB로 표시해 경고를 냈습니다. 이는 필수 검사 실패가 아닙니다. 이후 사용자가 `zetarishackathon.azurecr.io` 로그인을 완료했습니다. 로그인한 컴퓨터에서는 아래 `docker login`을 다시 실행할 필요 없이 시작 스크립트를 실행하면 됩니다. 아래 명령은 맥의 일반 터미널에서 실행합니다.
-
-```bash
-cd /Users/suyeongkim/cs/openAgent
-open -a Docker
-docker login zetarishackathon.azurecr.io
-bash scripts/start_zetaris.sh
-```
-
-로그인 정보는 다운로드 화면에서 받은 값을 입력합니다. 별도 로그인 명령을 받았다면 그 명령을 사용합니다. 스크립트는 preflight, 구성 검증, 이미지 다운로드, 시작, 준비 상태 검사를 순서대로 진행합니다. 검사는 실패 시 30초 간격으로 최대 30회 재시도합니다. 기존 데이터를 삭제하지 않습니다. 이 작업 세션은 Docker 소켓 접근과 외부 다운로드 권한이 제한되어 있습니다. Docker 엔진 실행은 사용자 터미널에서 확인했으며, 이미지 다운로드·Zetaris 서비스 구동은 아직 확인하지 못했습니다.
-
-다음은 이미 적용한 플랫폼 설정입니다. **번들에 포함된** `.env`는 프로젝트 루트의 `.env`와 별개이며, 번들의 이미지 버전 등 다른 값은 유지했습니다.
-
-| 설정 | 값 |
-| --- | --- |
-| `ZETARIS_ADMIN_EMAIL` | `admin@zetaris.com` |
-| `ZETARIS_ADMIN_PASSWORD` | 생성한 28자 비밀번호, 파일에서 확인 |
-| `ZETARIS_ADMIN_ORG` | `openAgent` |
-| `ZSPARK_DRIVER_MEM` | `2g` |
-| `ZSPARK_DRIVER_CORES` | `2` |
-| `ZSPARK_MASTER_URL` | `local[2]` |
-| `ZETARIS_API_MAX_HEAP` | `1g` |
-| `UI_PORT` | `3000` |
-| `ALLOWED_ORIGINS`, `GUI_URL` | `http://localhost:3000` |
-| `COMPOSE_PROFILES` | 빈 값 |
-
-관리자 비밀번호는 8자 이상이며 대문자·소문자·숫자와 `$ @ ! % * ? &` 중 하나를 포함해야 합니다. 다른 특수문자는 허용되지 않습니다. 제공된 `verify.sh`가 값을 단순하게 읽으므로 이번에 생성한 비밀번호는 영문·숫자·`@`만 사용해 따옴표나 변수 확장이 필요하지 않도록 했습니다. 관리자 계정은 첫 실행 전에 설정해야 합니다.
-
-시작 스크립트 대신 각 단계를 직접 실행하려면 플랫폼 폴더에서 진행합니다.
-
-```bash
-cd /Users/suyeongkim/cs/openAgent/zetaris-platform
-./preflight.sh
-chmod 600 .env
-docker compose config --quiet
-docker compose pull
-docker compose up -d
-docker compose ps --all
-./verify.sh
-```
-
-최초 준비에 PDF 기준 30~45분 정도 걸릴 수 있습니다. 받은 번들의 구성은 `postgres`, `driver`, `api`, `ui`가 실행되고 `init`, `bootstrap`이 `Exited (0)`인 상태가 정상입니다. 이 번들에는 PDF의 `ai-datasteward` 서비스와 `ZETARIS_SEED_TPCH` 설정이 없으며, 기본 샘플 데이터는 `NY_TAXI`, `TPCDS_DB`입니다. 공급된 Compose·이미지 조합을 유지했습니다. 초기화 중 검사가 실패하면 완료 후 다시 `./verify.sh`를 실행합니다.
-
-[로컬 Zetaris](http://localhost:3000)에 로그인해 SQL Editor에서 `SELECT 1 AS one;`을 실행합니다. API 키는 웹 UI에서 직접 생성해 프로젝트 루트 `.env`의 `ZETARIS_API_KEY`에 저장합니다.
-
-공식 데이터 예제는 프로젝트 루트에서 내려받습니다.
-
-```bash
-cd /Users/suyeongkim/cs/openAgent
-git clone https://github.com/zetaris/getting-started.git
-```
-
-`getting-started/AGENTS.md`를 읽고, PDF 1.8절에 따라 `open_data/rest_apis/sql/non_rate_limited/02_pokeapi_create.sql`의 PokéAPI 데이터베이스·컨테이너·Pikachu 테이블·abilities view 생성문을 하나씩 실행합니다. 전체 SQL 파일을 한 번에 실행하지 않습니다. 확인 쿼리는 다음과 같습니다.
-
-```sql
-SELECT pokemon_name, ability_name, is_hidden
-FROM pokeapi.pikachu_abilities_table;
-```
-
-예상 결과는 `static`, `lightning-rod` 두 행입니다. 공급 데이터가 바뀌면 원본 응답도 확인합니다. 정지·재시작은 플랫폼 폴더에서 `docker compose stop`과 `docker compose start`를 사용합니다. `docker compose down -v`는 데이터와 암호화 키를 삭제합니다.
-
-## Nemotron 연결
-
-PDF 9~10쪽 기준으로 NVIDIA는 행사 전용 키를 지급하지 않으며 참가자가 직접 발급합니다. Meterless 경로도 계정에서 키를 만드는 절차로 적혀 있지만, 제공된 PDF의 가입·해커톤 크레딧 링크와 provider URL은 빈칸이고 지급 일정은 없습니다. 현재 공식 사이트에서 해커톤용 가입·키 발급 경로는 확인하지 못했습니다. 주최 측 링크가 필요합니다. NVIDIA 직접 API는 모델 페이지의 **Get API Key**에서 진행합니다.
-
-기본값은 NVIDIA 직접 API입니다. [공식 Nemotron 모델 페이지](https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b)에서 로그인하고 API 키를 직접 발급해 프로젝트 루트 `.env`의 `MODEL_API_KEY`에 입력합니다. 키 값은 채팅이나 Git에 올리지 않습니다.
-
-```dotenv
-MODEL_BASE_URL=https://integrate.api.nvidia.com/v1
-MODEL_API_KEY=
-NEMOTRON_MODEL=nvidia/nemotron-3-super-120b-a12b
-```
-
-Meterless를 사용하려면 위 세 값을 모두 Meterless 계정에서 받은 값으로 변경합니다. PDF에는 Meterless 가입·크레딧·API 주소·프롬프트 라이브러리 링크가 비어 있습니다. PDF 첫 부분은 Meterless 실행을 참가 조건으로 표현하지만 Power 절은 NVIDIA 직접 API도 허용하므로, 별도 Meterless 필수 준비 사항은 주최 측 안내를 확인해야 합니다.
-
-## 연결 검사
-
-```bash
-.venv/bin/python smoke_test.py --config-only
-.venv/bin/python smoke_test.py
-```
-
-첫 명령은 설정만 검사하며 API를 호출하지 않습니다. 두 번째는 Zetaris 웹, REST SQL, Nemotron 응답을 실제 호출해 확인합니다. 실패 시 종료 코드 1을 반환하고 키나 응답 본문은 출력하지 않습니다. 세 항목이 모두 PASS여야 Data·Power 연결 검증이 끝납니다. Cursor Agent 검사와 Zetaris `verify.sh`·Pikachu 쿼리도 별도로 통과해야 합니다.
+외부 데이터와 벤더 코드의 출처·라이선스는 [Cool Sydney 상세 문서](cool-sydney/README.md#출처와-라이선스) 및 해당 `vendor/` 라이선스 파일을 확인하세요.

@@ -1,12 +1,14 @@
 # Cool Sydney
 
+전체 설치·서비스 구성은 [저장소 README](../README.md)를 먼저 확인하세요. 이 문서는 지도·원천 자료·계산 가정과 에이전트 도구의 상세를 정리합니다.
+
 기본 **설치 후 열지도**는 주변 분석 지면을 붉은 기준 공기온도로, 포그 냉각 영역을 낮은 온도에 따라 파랗게 표현합니다. 기준은 CBD 기상 모델 또는 수동 입력값 하나이며, 거리별 온도를 측정한 지도가 아닙니다. 색 눈금은 기본적으로 `기준 − 2°C (파랑) ↔ 기준 (빨강)`이고 화면에서 조절할 수 있습니다. 색 눈금을 바꿔도 계산값은 바뀌지 않습니다. **설치 전**은 같은 붉은 기준, **냉각량**은 기존 0–5°C 파란 감소량 눈금을 사용합니다. 배경 마스크는 10 m 지면 표본을 캐시하고, 장비 주변 감소량은 2 m 표본으로 그립니다. 건물·수면 경계는 이 해상도에서 근사됩니다.
 
 대표 장비는 **Filtertech FEC-MP003** 한 종류입니다. 지도 도구 막대의 **심기**로 연속 배치하고, **선택·온도** 또는 Esc로 배치를 끝낸 뒤 분사기를 선택해 **이동·삭제**합니다. 왼쪽 배치 목록에서도 선택할 수 있습니다. **전체 분사 ON/OFF**는 모든 배치 장비에 적용하며 OFF에서는 물 분사·공기 냉각량을 0으로 계산합니다. 첫 분사기를 놓으면 자동 확대합니다. 노즐과 안개 애니메이션은 실제 치수·입자 궤적을 재현한 CAD/CFD가 아닌 설명용 모형입니다.
 
 확인된 장비 사양은 ㄱ자형, LED 조명, 노즐 10개, 노즐 구경 0.1 mm입니다. 구경은 분무 입경이 아닙니다. 출처: [필터테크 영문 카탈로그](https://filtertech.co.kr/wp-content/uploads/2025/01/%E2%98%85filtertech-cooling-fog-system-catalogNomination-form_English-version.pdf)의 장비 구성표 및 [FEC-MP003 상품 정보](https://water777.co.kr/goods/view?no=189465). 압력별 노즐 유량과 거리별 성능은 미확인으로 유지합니다. `노즐당 유량(L/min) × 10 × 60`으로 1대의 L/h를 계산하며 초기 0.020 L/min → 12 L/h는 시나리오 가정입니다. [키그린 카탈로그](https://www.key-green.com/wp-content/uploads/2022/03/%ED%82%A4%EA%B7%B8%EB%A6%B0_%EC%BF%A8%EB%A7%81%ED%8F%AC%EA%B7%B8.pdf)는 별도 업체의 설명 자료로, 그 온도 저감 홍보 수치를 FEC-MP003의 성능 상수로 사용하지 않습니다.
 
-Zetaris 에이전트 연결은 아직 구현 전입니다. 현재 `integrations.js`의 `zetarisQuery`와 `zetaris-gis.js`는 REST SQL 요청, GIS Parquet 등록 및 집계 확인을 담당합니다. 에이전트를 붙일 때는 서버에서 `ZETARIS_REST_URL`, `ZETARIS_ORG_ID`, `ZETARIS_API_KEY`를 사용하며 설치 버전의 SQL 경로를 `ZETARIS_SQL_PATH`로 지정해야 합니다. 키는 브라우저나 모델 프롬프트로 전달하지 않습니다. 제안 흐름은 **사용자 요청 → AI 에이전트 → 정해진 조회 도구 → Zetaris → 물리 시뮬레이션 → 지도 배치안**입니다. 보행·수목·기상 테이블을 조회 도구에 연결하고 시뮬레이터를 서버에서도 호출할 수 있도록 한 뒤 도구 호출 루프를 추가해야 합니다. 현재 포그 계산과 배치는 브라우저에서 동작하며 Zetaris나 AI가 실행한 결과로 표시하지 않습니다. [Zetaris API 접근 안내](https://kbase.zetaris.com/knowledge/accessing-zetaris-using-api).
+Zetaris 운영 검토 에이전트는 `agent.js`의 LangGraph로 구현되어 있습니다. 메타 카탈로그와 사용자 기억을 읽고, 읽기 전용 SQL·보행 예측·장비 배분·포그 계산 도구를 호출합니다. 에이전트 SQL은 `agent-connectors.js`에서 Docker 안의 JDBC로 실행합니다. 기존 `integrations.js`·`zetaris-gis.js`의 REST 등록·조회는 별도 경로입니다. 실제 모델·DB 연결에는 공급자 키, 등록된 카탈로그와 정상 driver가 필요합니다. [설치와 서비스별 실행 순서](../README.md#시작하기)를 먼저 확인하세요.
 
 분사기 배치 후에는 해당 위치로 자동 확대하며, 지도 라벨과 **선택 위치** 카드에 `설치 전 → 설치 후 (감소량)`을 표시합니다. 배치 모드가 아닐 때 주변 지면을 클릭하면 해당 좌표의 같은 계산장을 조회합니다. 영향 반경 밖은 감소량 0이며, 기상이 없으면 수치를 만들지 않습니다. 이 값은 공기온도 추정으로, 바닥 표면온도나 체감온도가 아닙니다. 바닥 재질·복사·전도·젖음·분사 시간에 따른 표면온도 모델은 아직 포함하지 않습니다.
 
@@ -165,11 +167,11 @@ Zetaris 컨테이너에서는 `processed/`가 `/home/zetaris/customer-data/share
 | CBD 4종 | 실제 OSM·City of Sydney·ERA5 수집, 6개 Parquet 검증, 자료 묶음 포인터 | 2025-01-15: 보행 엣지 23,839·수목 7,887·계수 96·기상 24행 |
 | 3D 지도 | Three.js 건물·보행망·수목·센서·경로 표시 | headless Chrome에서 화면과 지도 클릭 흐름 확인 |
 | 그림자 | 20m 건물 그늘 개요 및 약 4m 경로 표본의 건물·가정 기반 수관 그림자 | 고정 입력 테스트, 실제 경로 워커·브라우저 실행 통과 |
-| Zetaris | 읽기 전용 마운트, 등록 SQL, 재시도 기록, 버전/행 수 확인, 높이 집계 | Docker 소켓 접근 차단, API 키 미설정으로 라이브 검증 전 |
-| NVIDIA Nemotron | 사용자 요청에 따른 결과 설명, 실행당 4회 제한, 성공 응답 캐시 | API 키 설정 및 실제 응답 확인 필요 |
-| Meterless H-MEM | 출처·버전·supersession·audit를 구현한 로컬 부분 구현 | 전체 엔진 통합 아님 |
+| Zetaris | REST 등록/조회, 에이전트 Docker JDBC, 카탈로그·행 수 검증 | 실제 driver와 SQL 응답은 실행 환경에서 별도 확인 |
+| 모델 | Gemini/NVIDIA Nemotron 선택, LangGraph 도구 호출·후속 요청, 별도 GIS 설명 기능 | 모의 공급자 테스트와 실제 인증·모델 호출은 별도 |
+| Meterless H-MEM | 별도 공식 참조 엔진 HTTP/UI, 지역별 조건 저장·검색·감사 이력 | 참조 엔진 테스트; 기존 지도 관찰 조건 저장소와 별개 |
 
-기존 합성 인구·쉼터 최적화 코드는 단위 테스트용으로 남아 있으며, 기본 GIS 화면에서는 사용하지 않습니다. NSW 공개 수관 피복 교차 확인, BOM 최근 관측, 정기 보행 조사, Zetaris의 새 CBD 테이블 등록, 수목 치수 단위·현장 접근성 검증은 후속 작업입니다. 거리별 온도 예측이나 쉼터 최적 배치 결과는 제공하지 않습니다. 거리 계산은 Town Hall 중심의 국지 평면 근사이며 EPSG:7856 전환은 후속 작업입니다. 지도 파생 건물 높이·평지·자료 경계의 불확실성이 있습니다.
+기존 합성 인구·쉼터 최적화 코드는 단위 테스트용으로 남아 있으며, 기본 GIS 화면에서는 사용하지 않습니다. NSW 공개 수관 피복 교차 확인, BOM 최근 관측, 정기 보행 조사의 현장·시간 의미 검증, 수목 치수 단위·현장 접근성 검증은 후속 작업입니다. 거리별 온도 예측이나 쉼터 최적 배치 결과는 제공하지 않습니다. 거리 계산은 Town Hall 중심의 국지 평면 근사이며 EPSG:7856 전환은 후속 작업입니다. 지도 파생 건물 높이·평지·자료 경계의 불확실성이 있습니다.
 
 ## 검증
 
@@ -178,7 +180,7 @@ cd cool-sydney
 npm test
 ```
 
-30개 테스트가 통과했습니다. CBD 테스트는 현지 시각 정규화, 층위별 보행 연결, 수관 광선, 실제 PyArrow 왕복과 해시 손상 거부를 확인합니다. 2025-01-15 실자료 수집과 화면 클릭을 통한 경로 비교도 별도로 확인했습니다. Zetaris와 NVIDIA는 모의 HTTP 응답으로 계약을 검사하며 실제 인증 성공을 의미하지 않습니다.
+현재 검증 명령은 전체 `tests/*.test.js`를 실행합니다. CBD 테스트는 현지 시각 정규화, 층위별 보행 연결, 수관 광선, 실제 PyArrow 왕복과 해시 손상 거부를 확인합니다. 2025-01-15 실자료 수집과 화면 클릭을 통한 경로 비교도 별도로 확인했습니다. Zetaris와 NVIDIA는 모의 HTTP 응답으로 계약을 검사하며 실제 인증 성공을 의미하지 않습니다.
 
 ## 출처와 라이선스
 
@@ -236,7 +238,7 @@ METERLESS_BASE_URL=http://127.0.0.1:8766
 ZETARIS_DRIVER_CONTAINER=zetaris-driver-1
 ```
 
-Meterless는 별도 로컬 서비스입니다. 이 작업 공간에서는 `../../meterless-demo`에서 `npm start`로 실행합니다. 다른 환경에서는 해당 H-MEM HTTP 어댑터를 별도로 준비해야 합니다. LangGraph는 기존 `/api/search`와 `/api/memories`에 연결하며, 이 저장소가 8766 서버나 H-MEM 엔진을 복제하지 않습니다. 기억 서버가 꺼져 있으면 실행 기록에 `unavailable`을 남기고 기억 없이 진행합니다.
+Meterless HTTP/UI 어댑터는 저장소의 `meterless-demo/`에 포함되어 있습니다. 최초에는 `npm --prefix meterless-demo ci`와 `npm --prefix meterless-demo run setup`으로 공식 H-MEM 참조 엔진을 준비합니다. 저장소 루트에서 `COOL_SYDNEY_PROJECT_ROOT="$PWD" npm --prefix meterless-demo start`로 실행하면 기억 UI는 `http://127.0.0.1:8766/`, 실행 모니터는 `http://127.0.0.1:8766/agent-monitor`에서 열립니다. LangGraph는 `/api/search`와 `/api/memories`로 지역별 기억을 읽고 저장합니다. 기억 서버가 꺼져 있으면 `unavailable`을 남기고 기억 없이 진행합니다.
 
 기존 대시보드를 종료한 다음, 저장소 루트에서 실행합니다.
 
@@ -253,9 +255,9 @@ node cool-sydney/server.js
 ### 메타 카탈로그와 도구
 
 - `scripts/build_agent_catalog.py`: 실제 Parquet 스키마·행 수·컬럼 의미·단위·조인 키·시간 범위·결측·출처를 읽어 `data/cool-sydney/catalog/current.json`과 `agent_catalog.parquet` 생성. 메타 테이블은 컬럼당 한 행입니다. 에이전트는 동일한 JSON 캐시를 한 번 읽어 프롬프트에 전달하므로 테이블마다 DESCRIBE하지 않습니다.
-- `execute_readonly_sql`: 모델이 현재 메타 정보에 맞춰 SQL을 작성합니다. 서버는 지정된 12개 테이블의 단일 SELECT만 실행합니다. 최대 3개 테이블·100행, 서브쿼리/CTE/파일 함수/UDF/쓰기 금지. JVM은 45초 query timeout을 요청하고 Node는 JDBC 프로세스를 60초로 제한합니다. 결과가 클 때는 집계를 요청합니다. Docker exec 종료가 모든 서버 측 작업의 취소를 보장하지는 않습니다.
+- `execute_readonly_sql`: 모델이 현재 메타 정보에 맞춰 SQL을 작성합니다. 서버는 현재 검증된 카탈로그에 등록된 테이블의 단일 SELECT만 실행합니다. 최대 3개 테이블·100행, 서브쿼리/CTE/파일 함수/UDF/쓰기 금지. JVM은 45초 query timeout을 요청하고 Node는 JDBC 프로세스를 60초로 제한합니다. 결과가 클 때는 집계를 요청합니다. Docker exec 종료가 모든 서버 측 작업의 취소를 보장하지는 않습니다.
 - `simulate_fog`: SQL로 먼저 읽은 기온·습도만 받습니다. `SELECT instant_utc, temperature_c, humidity_pct FROM ...weather` 형태로 조회합니다. 기존 `mist-model.mjs`를 재사용해 소스 공기 냉각과 물 사용량을 계산합니다. 기본 가정은 노즐당 0.02 L/min, 증발 비율 0.7, 공기 유량 3 m³/s. 5대 × 8시간이면 480L이므로 300L 예산을 넘습니다. 이 값은 장비 실측 유량이 아닙니다.
-- 모델 최대 6회, 호출당 60초, 전체 5분 제한. 도구 오류는 모델에 반환해 제한 내에서 수정하게 합니다. 모델 요청은 사용자 버튼 클릭 때만 발생합니다. 공급자는 Gemini와 NVIDIA 중 선택할 수 있습니다.
+- 모델 최대 4회, 도구 실행 최대 6회, 모델 호출당 60초, 전체 3분 제한. 도구 오류는 모델에 반환해 제한 내에서 수정하게 합니다. 모델 요청은 사용자 버튼 클릭 때만 발생합니다. 공급자는 Gemini와 NVIDIA 중 선택할 수 있습니다.
 - 기억에는 지역 prefix와 run ID·출처가 붙습니다. 사용자가 입력한 조건·피드백만 저장하고, 답변을 실측 사실로 자동 저장하지 않습니다. 최근 지역 기억 최대 12개를 원문 검색합니다. 운영 조건 기억 체크 시 구조화한 장비 수·출퇴근 우선·물 예산을 저장하고 다음 요청으로 갱신합니다. 범용적인 의미 검색·충돌 해결 기능은 없습니다.
 
 실행 기록은 `data/cool-sydney/agent-runs/<run-id>.json`에 저장합니다. 카탈로그 버전, 기억 ID/출처, SQL, 결과, 계산 가정, 모델 사용량, 도구 오류와 최종 답변을 같은 run에서 확인합니다. 모델 내부 reasoning이나 API 키를 기록하지 않습니다. 서버 재시작 중이던 실행은 실패로 표시하며 중간 노드에서 재개하는 체크포인터는 아직 없습니다.
@@ -377,4 +379,4 @@ python3 scripts/train_pedestrian_forecast.py --date 2025-12-19 --sync-zetaris
 python3 scripts/fetch_walking_surveys.py --sync-zetaris --analysis-date 2025-12-19
 ```
 
-Docker 접근 또는 등록 검증이 실패해도 이미 저장한 Parquet는 유지됩니다. 원인을 해결한 뒤 첫 번째 `register_zetaris.py --sync` 명령만 다시 실행하면 됩니다. 정기 조사 등록은 원천 자료를 SQL로 질의 가능하게 만드는 단계이며, 기존 구역 대리 배분 모델에 조사를 자동 적용하는 단계는 아닙니다.
+Docker 접근 또는 등록 검증이 실패해도 이미 저장한 Parquet는 유지됩니다. 원인을 해결한 뒤 첫 번째 `register_zetaris.py --sync` 명령만 다시 실행하면 됩니다. 등록 후 정기 조사 SQL 결과에서 검증된 지점 ID·조사 기간을 후보 집합으로 유지합니다. 후속 `allocate_fog`는 동일 지점·동일 조사 기간의 시간별 계수를 조회해 수요 비례 배분합니다. 자동 센서의 고정 구역 대리 배분과는 별도 경로입니다. 조사일 수요를 분석일 실측으로 바꾸거나 설치 위치의 최적성을 검증하는 기능은 아닙니다.
