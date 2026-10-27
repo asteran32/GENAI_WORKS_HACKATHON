@@ -46,7 +46,7 @@ python3 scripts/register_zetaris.py
 bash scripts/run_dashboard.sh
 ```
 
-완료 후 **http://127.0.0.1:8765**에 접속합니다. 서버 종료는 Ctrl+C입니다. 기존 검증된 자료는 재사용합니다. 건물 지도만 먼저 준비하려면 `bash scripts/run_dashboard.sh --map-only`, 다른 과거 날짜의 계수를 받으려면 `bash scripts/run_dashboard.sh --date 2025-01-16`을 사용합니다. 기본값은 자료가 있는 여름날이며 현재 날짜의 보행 계수로 표시하지 않습니다. 화면에서 경로 분석은 수집한 날짜를 선택하세요. 거리 기온 실측 CSV는 Git에 없으며 별도 수집 대상입니다.
+완료 후 **http://127.0.0.1:8765**에 접속합니다. 제출용 슬라이드 덱은 **http://127.0.0.1:8765/deck**입니다. 서버 종료는 Ctrl+C입니다. 기존 검증된 자료는 재사용합니다. 건물 지도만 먼저 준비하려면 `bash scripts/run_dashboard.sh --map-only`, 다른 과거 날짜의 계수를 받으려면 `bash scripts/run_dashboard.sh --date 2025-01-16`을 사용합니다. 기본값은 자료가 있는 여름날이며 현재 날짜의 보행 계수로 표시하지 않습니다. 화면에서 경로 분석은 수집한 날짜를 선택하세요. 거리 기온 실측 CSV는 Git에 없으며 별도 수집 대상입니다.
 
 현재 작업 공간의 Git 체크아웃은 `.publish/GENAI_WORKS_HACKATHON`입니다. 이 체크아웃에 자체 `.venv`가 없으면 상위 폴더의 준비된 Python 환경을 찾아 사용합니다. 바깥 `openAgent/cool-sydney`에는 이전 코드가 있으므로 최신 저장소의 실행 스크립트를 사용하세요.
 
