@@ -1,13 +1,130 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cool Sydney · Urban shade lab</title><link rel="stylesheet" href="/city.css"></head><body>
-<header><a class="brand" href="/">COOL<span>SYDNEY</span><i></i></a><span class="caption">URBAN SHADE LAB</span><span class="badge" id="server-state">백엔드 연결 중</span></header>
-<main><aside class="controls">
-<div class="eyebrow">01 / STUDY AREA</div><h1>도시의 그늘을<br>시간으로 살펴보기</h1><p class="intro">시드니의 실제 건물 형상 위에서 태양의 위치와 지면의 그림자를 비교합니다.</p>
-<div class="area"><strong>● Sydney CBD</strong><small>Town Hall · NSW, Australia</small></div><button class="primary" id="import">지도 데이터 가져오기 ↗</button><p class="hint" id="import-hint">서버가 GIS를 받아 로컬 Parquet로 저장합니다.</p>
-<hr><div class="eyebrow">02 / SUN & TIME</div><label class="field">관찰 날짜<input id="date" type="date" value="2027-01-15"></label><div class="time"><label for="hour">현지 시각</label><output id="clock">14:00</output></div><input id="hour" type="range" min="0" max="23.75" step="0.25" value="14"><div class="scale"><span>00:00</span><span>12:00</span><span>24:00</span></div><p class="hint">Australia/Sydney · 서머타임 자동 적용</p><button id="simulate" disabled>이 시간의 그림자 계산</button><button id="save" class="quiet" disabled>관찰 조건 기억하기</button>
-<hr><div class="eyebrow">03 / LAYERS</div><label class="toggle"><span>건물 형상 · 높이</span><input type="checkbox" id="buildings" checked></label><label class="toggle"><span>지면 그늘 표본</span><input type="checkbox" id="samples" checked></label><div class="note"><b>해석의 범위</b><p>높이는 지도 렌더링용 파생값입니다. 평평한 지형을 가정한 그림자 시나리오이며, 그늘 비율이 냉방 수요나 기온 감소량을 뜻하지 않습니다.</p></div>
-</aside><section class="map-section" aria-label="시드니 3차원 GIS 지도"><div class="map-heading"><div><span class="eyebrow">LIVE SCENARIO</span><h2>Sydney, in perspective.</h2></div><span id="scenario-date">데이터 대기</span></div><div id="map"><div class="empty" id="map-empty"><div>⌖</div><h3>실제 시드니 지도를 불러오세요</h3><p>건물·도로·녹지 형상은 서버에서 가져옵니다.<br>저장된 자료가 있으면 Parquet에서 다시 읽습니다.</p></div></div><div class="map-tools"><button id="perspective" aria-label="입체 보기">3D</button><button id="top" aria-label="위에서 보기">평면</button><button id="reset" aria-label="지도 중심으로">⌖</button></div><div class="legend"><span>■ 20m 그늘 표본</span><span>□ 높이 미상 · 윤곽</span></div><div id="message" class="message" role="status" aria-live="polite">실제 GIS 자료를 기다리고 있습니다.</div><div class="map-footer"><span>드래그: 회전 · 휠: 확대 · 오른쪽 드래그: 이동</span><span><a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://openmaptiles.org/">OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a></span></div></section>
-<aside class="insights"><div class="eyebrow">SCENARIO INSIGHTS</div><h2>빛과 그늘</h2><p id="result-state" class="hint">계산 후 결과가 표시됩니다.</p><div class="main-metric"><span>지면 표본의 그늘 비율</span><strong id="shade-percent">—<small>%</small></strong><div class="track"><i id="shade-bar"></i></div><p id="sample-count">건물과 수면을 제외한 분석 구역</p></div><div class="metric-pair"><div><span>태양 고도</span><strong id="sun-alt">—</strong></div><div><span>태양 방위각</span><strong id="sun-az">—</strong></div></div>
-<div class="data-card"><div class="eyebrow">DATA PROVENANCE</div><dl><dt>건물 형상 조각</dt><dd id="building-count">—</dd><dt>높이로 압출 가능한 조각</dt><dd id="height-count">—</dd><dt>저장 형식</dt><dd id="storage">아직 없음</dd><dt>백엔드 읽기</dt><dd id="read-source">—</dd></dl><p class="hint">타일 경계에서 분할되므로 실제 건물 수와 다릅니다.</p><code id="version">dataset / pending</code><details><summary>Parquet 파일</summary><ul id="parquet-files"></ul></details></div>
-<div class="integration"><div><b>Zetaris</b><span id="zetaris-state" class="state">미확인</span></div><p>Parquet를 가상 테이블로 등록하고 동일 버전의 행 수를 조회합니다.</p><div class="button-pair"><button id="register" disabled>등록</button><button id="verify" disabled>조회</button></div><details><summary>등록 SQL 보기</summary><pre id="sql-plan">GIS 저장 후 생성됩니다.</pre></details><pre id="sql-result" hidden></pre></div>
-<div class="integration"><div><b>NVIDIA Nemotron</b><span id="nvidia-state" class="state">미확인</span></div><p>계산 결과의 가정과 한계를 설명합니다. 요청 시 모델 API를 호출합니다.</p><button id="explain" disabled>이 결과 설명하기</button><p id="explanation" class="answer"></p></div><div class="integration"><div><b>Meterless H-MEM</b><span class="state">일부 구현</span></div><p id="memory-state">관찰 조건의 출처·버전·변경 기록을 로컬에 저장합니다. 전체 엔진 통합 전입니다.</p></div><div class="integration"><b>다음 분석에 필요한 자료</b><p>수목 수관·수고, 지형, ABS 인구, 시설 운영시간과 수용량을 연결해야 냉방 쉼터 접근성과 배치를 계산할 수 있습니다.</p></div></aside></main>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cool Sydney · Urban shade lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/city.css"></head><body>
+<header class="topbar">
+  <a class="brand" href="/">COOL<span>SYDNEY</span></a><span class="topbar-sep"></span><span class="caption">URBAN SHADE LAB</span>
+  <span class="topbar-meta mono" id="area-coords">151.188–151.228°E · 33.848–33.885°S</span>
+  <span class="topbar-meta mono" id="version">dataset / pending</span>
+  <span class="pill" id="server-state" data-tone="idle">백엔드 연결 중</span>
+</header>
+<main class="shell">
+
+<aside class="panel panel-left" aria-label="시뮬레이션 조건">
+  <section class="block">
+    <h2 class="eyebrow"><b>01</b> Study area</h2>
+    <div class="area-card"><strong>Sydney CBD · Harbour</strong><span class="mono">NSW, AU · Australia/Sydney</span></div>
+    <button class="btn btn-primary" id="import">지도 데이터 가져오기</button>
+    <p class="hint" id="import-hint">서버가 GIS를 받아 로컬 Parquet로 저장합니다.</p>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>02</b> Scenario</h2>
+    <div class="scenario-grid" role="radiogroup" aria-label="관찰 시나리오" id="scenarios"></div>
+    <label class="field"><span>관찰 날짜</span><input id="date" type="date" value="2027-01-15" class="mono"></label>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>03</b> Baseline</h2>
+    <label class="field"><span>비교 기준 날짜</span><select id="baseline"></select></label>
+    <p class="hint">같은 시각, 기준 날짜의 그늘 추정치와 비교합니다.</p>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>04</b> Layers</h2>
+    <label class="switch"><i class="swatch sw-building"></i><span>건물 형상 · 높이</span><input type="checkbox" id="buildings" checked></label>
+    <label class="switch"><i class="swatch sw-shade"></i><span>그림자 투영 <em>실시간</em></span><input type="checkbox" id="layer-shade" checked></label>
+    <label class="switch"><i class="swatch sw-cells"></i><span>검증 표본 <em>20 m</em></span><input type="checkbox" id="layer-cells" checked></label>
+    <label class="switch"><i class="swatch sw-ground"></i><span>도로 · 녹지 · 수면</span><input type="checkbox" id="layer-ground" checked></label>
+  </section>
+
+  <section class="block block-actions">
+    <button class="btn" id="simulate" disabled>이 시각 서버 검증 계산</button>
+    <button class="btn btn-quiet" id="save" disabled>관찰 조건 기억하기</button>
+  </section>
+
+  <aside class="note"><b>해석의 범위</b><p>그림자 투영은 화면 표시용 기하 추정이며, 그늘 비율의 기준값은 서버 광선 교차 계산(20 m 표본)입니다. 높이는 렌더링용 파생값이고, 그늘 비율이 냉방 수요를 뜻하지 않습니다.</p></aside>
+</aside>
+
+<section class="stage" aria-label="시드니 3차원 GIS 지도">
+  <div id="map"><div class="empty" id="map-empty"><div class="empty-mark">⌖</div><h3>실제 시드니 지도를 불러오세요</h3><p>건물·도로·녹지 형상은 서버에서 가져옵니다. 저장된 자료가 있으면 Parquet에서 다시 읽습니다.</p></div></div>
+  <div class="hud hud-title"><span class="eyebrow">Live scenario</span><h1>Sydney, in perspective.</h1><p class="place-focus" id="place-focus">구역을 불러오는 중</p></div>
+  <div class="hud hud-stamp mono" id="scenario-date">데이터 대기</div>
+  <div class="hud hud-tools" role="group" aria-label="시점"><button id="perspective" aria-label="입체 보기">3D</button><button id="top" aria-label="위에서 보기">2D</button><button id="reset" aria-label="지도 중심으로">⌖</button></div>
+  <div class="hud hud-compass" aria-label="태양 위치"><svg viewBox="-50 -50 100 100" id="compass"><circle r="44" class="c-ring"/><circle r="29.3" class="c-ring c-minor"/><circle r="14.7" class="c-ring c-minor"/><path d="M0-44V44M-44 0H44" class="c-axis"/><text y="-36" class="c-n">N</text><line id="sun-ray" x1="0" y1="0" x2="0" y2="0" class="c-ray"/><circle id="sun-dot" r="4.5" class="c-sun"/></svg><span class="mono" id="compass-label">—</span></div>
+  <div class="hud hud-legend" aria-label="범례">
+    <span><i class="swatch sw-shade"></i>그림자 투영</span><span><i class="swatch sw-cells"></i>검증 그늘 표본</span><span><i class="swatch sw-building"></i>건물 (높을수록 진함)</span>
+  </div>
+  <div class="tooltip" id="tooltip" hidden></div>
+  <div id="message" class="statusbar" role="status" aria-live="polite">실제 GIS 자료를 기다리고 있습니다.</div>
+  <div class="hud hud-credit"><span>드래그 회전 · 휠 확대 · 우클릭 이동 · 건물 호버</span><span><a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://openmaptiles.org/">OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a></span></div>
+</section>
+
+<section class="timeline" aria-label="시간 탐색">
+  <div class="tl-controls">
+    <button class="btn-icon" id="play" aria-label="재생">▶</button>
+    <div class="segmented" role="radiogroup" aria-label="재생 속도" id="speeds"><button data-speed="1" aria-pressed="true" title="1초당 6분">1×</button><button data-speed="5" aria-pressed="false" title="1초당 30분">5×</button><button data-speed="24" aria-pressed="false" title="1초당 2시간 24분">24×</button></div>
+    <div class="tl-clock"><output id="clock" class="mono">14:00</output><span class="mono" id="tz">AEDT</span></div>
+    <dl class="tl-facts mono"><div><dt>일출</dt><dd id="sunrise">—</dd></div><div><dt>일몰</dt><dd id="sunset">—</dd></div><div><dt>남중 고도</dt><dd id="noon-alt">—</dd></div></dl>
+    <div class="tl-legend"><span><i class="ln ln-verified"></i>검증 (서버)</span><span><i class="ln ln-estimate"></i>추정 (화면)</span><span><i class="ln ln-baseline"></i>기준</span><span><i class="ln ln-delta"></i>Δ 구간</span></div>
+  </div>
+  <div class="tl-chart" id="day-chart"><svg id="day-svg" role="img" aria-label="하루 그늘 비율 곡선"></svg><div class="chart-tip" id="chart-tip" hidden></div></div>
+  <input id="hour" type="range" min="0" max="23.75" step="0.25" value="14" aria-label="현지 시각">
+</section>
+
+<aside class="panel panel-right" aria-label="분석 결과">
+  <section class="block">
+    <h2 class="eyebrow"><b>05</b> Analytics</h2>
+    <div class="kpi-hero card">
+      <div class="card-head"><span>지면 그늘 비율</span><span class="pill" id="verify-state" data-tone="idle">대기</span></div>
+      <strong class="mono" id="shade-percent">—<small>%</small></strong>
+      <div class="meter"><i id="shade-bar"></i><b id="estimate-tick" title="화면 추정치"></b></div>
+      <p class="hint" id="sample-count">건물과 수면을 제외한 분석 구역</p>
+      <p class="calib mono" id="calibration">추정 —</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="compare card" id="compare">
+      <div class="card-head"><span>시나리오 vs 기준</span><span class="delta mono" id="delta-badge" data-tone="idle">Δ —</span></div>
+      <div class="compare-row"><span class="compare-label"><i class="ln ln-estimate"></i><b id="compare-scn-label">관찰일</b></span><span class="mono" id="compare-scn">—</span></div>
+      <div class="compare-bar"><i id="compare-scn-bar" class="bar-estimate"></i></div>
+      <div class="compare-row"><span class="compare-label"><i class="ln ln-baseline"></i><b id="compare-base-label">기준</b></span><span class="mono" id="compare-base">—</span></div>
+      <div class="compare-bar"><i id="compare-base-bar" class="bar-baseline"></i></div>
+      <p class="hint" id="compare-note">같은 시각 · 화면 추정 모델 기준</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="kpi-grid">
+      <div class="kpi"><span>태양 고도</span><strong class="mono" id="sun-alt">—</strong></div>
+      <div class="kpi"><span>태양 방위각</span><strong class="mono" id="sun-az">—</strong></div>
+      <div class="kpi"><span>그림자 길이 <em>10 m 건물</em></span><strong class="mono" id="shadow-len">—</strong></div>
+      <div class="kpi"><span>일조 시간</span><strong class="mono" id="daylength">—</strong></div>
+      <div class="kpi"><span>주간 평균 그늘 <em>추정</em></span><strong class="mono" id="day-mean">—</strong></div>
+      <div class="kpi"><span>최소 그늘 시각 <em>추정</em></span><strong class="mono" id="day-min">—</strong></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>06</b> Provenance</h2>
+    <dl class="spec">
+      <dt>건물 형상 조각</dt><dd class="mono" id="building-count">—</dd>
+      <dt>높이 압출 가능</dt><dd class="mono" id="height-count">—</dd>
+      <dt>저장 형식</dt><dd id="storage">아직 없음</dd>
+      <dt>백엔드 읽기</dt><dd id="read-source">—</dd>
+      <dt>계산 모델</dt><dd id="run-model">—</dd>
+    </dl>
+    <p class="hint">타일 경계에서 분할되므로 실제 건물 수와 다릅니다.</p>
+    <details><summary>Parquet 파일</summary><ul class="mono" id="parquet-files"></ul></details>
+  </section>
+
+  <section class="block">
+    <h2 class="eyebrow"><b>07</b> Integrations</h2>
+    <div class="integration"><div class="int-head"><b>Zetaris</b><span id="zetaris-state" class="pill" data-tone="idle">미확인</span></div><p>Parquet를 가상 테이블로 등록하고 동일 버전의 행 수를 조회합니다.</p><div class="button-pair"><button class="btn btn-sm" id="register" disabled>등록</button><button class="btn btn-sm" id="verify" disabled>조회</button></div><details><summary>등록 SQL 보기</summary><pre id="sql-plan">GIS 저장 후 생성됩니다.</pre></details><pre id="sql-result" hidden></pre></div>
+    <div class="integration"><div class="int-head"><b>NVIDIA Nemotron</b><span id="nvidia-state" class="pill" data-tone="idle">미확인</span></div><p>계산 결과의 가정과 한계를 설명합니다. 요청 시 모델 API를 호출합니다.</p><button class="btn btn-sm" id="explain" disabled>이 결과 설명하기</button><p id="explanation" class="answer"></p></div>
+    <div class="integration"><div class="int-head"><b>Meterless H-MEM</b><span class="pill" data-tone="warn">일부 구현</span></div><p id="memory-state">관찰 조건의 출처·버전·변경 기록을 로컬에 저장합니다. 전체 엔진 통합 전입니다.</p></div>
+    <div class="integration"><div class="int-head"><b>다음 분석에 필요한 자료</b><span class="pill" data-tone="idle">미연결</span></div><p>수목 수관·수고, 지형, ABS 인구, 시설 운영시간과 수용량을 연결해야 냉방 쉼터 접근성과 배치를 계산할 수 있습니다.</p></div>
+  </section>
+</aside>
+</main>
 <noscript>이 대시보드는 JavaScript와 로컬 백엔드 서버가 필요합니다.</noscript><script>setTimeout(function(){if(!window.coolSydneyBooted){var m=document.getElementById('message');m.textContent='화면 스크립트를 불러오지 못했습니다. 이전 서버가 실행 중일 수 있습니다. 터미널에서 Ctrl+C 후 bash scripts/start_cool_sydney.sh로 다시 실행하세요.';m.classList.add('error');document.getElementById('server-state').textContent='스크립트 로드 실패';}},8000);</script><script type="module" src="/city-app.mjs"></script></body></html>

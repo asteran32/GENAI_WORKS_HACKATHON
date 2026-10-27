@@ -2,7 +2,19 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const AREA = Object.freeze({ id: 'sydney-town-hall', name: 'Sydney CBD · Town Hall', west: 151.201, south: -33.876, east: 151.213, north: -33.867, longitude: 151.207, latitude: -33.8715, bufferM: 600, timezone: 'Australia/Sydney' });
+// Bounded CBD fetch (≤16 z14 tiles). Wider than Town Hall so the city reads as continuous.
+const AREA = Object.freeze({
+  id: 'sydney-cbd-harbour',
+  name: 'Sydney CBD · Harbour',
+  west: 151.188,
+  south: -33.885,
+  east: 151.228,
+  north: -33.848,
+  longitude: 151.208,
+  latitude: -33.8665,
+  bufferM: 100,
+  timezone: 'Australia/Sydney',
+});
 const EARTH = 6371008.8, RAD = Math.PI / 180;
 function project(lon, lat, area = AREA) { return [(lon - area.longitude) * RAD * EARTH * Math.cos(area.latitude * RAD), (lat - area.latitude) * RAD * EARTH]; }
 function unproject(x, y, area = AREA) { return [area.longitude + x / (RAD * EARTH * Math.cos(area.latitude * RAD)), area.latitude + y / (RAD * EARTH)]; }
