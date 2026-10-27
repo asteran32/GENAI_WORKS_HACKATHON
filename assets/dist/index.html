@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f8f7" />
+  <meta name="description" content="Explore heat, shade and pedestrian demand in the Sydney Cooling Fog Simulator." />
+  <title>Mist — Sydney Cooling Fog Simulator</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./cooling.css" />
+  <link rel="stylesheet" href="./chat.css" />
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
+</head>
+<body>
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-mist" viewBox="0 0 24 24"><path d="M12 3s-5 5-5 8a5 5 0 0 0 10 0c0-3-5-8-5-8Z"/><path d="M3 19h3m3 2h6m3-2h3"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M20 4C9 2 3 7 5 14c1 5 8 6 12 2 3-3 3-8 3-12Z"/><path d="m4 21 11-12M9 16v-5m0 5h5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 1.8 8M3 4v6h6"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a5 5 0 1 1 1-9 6 6 0 0 1 11 3 3 3 0 0 1-1 6H7Z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-11v1"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 24 24"><path d="M3 8h12a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11a7 7 0 0 1-7 7H7l-4 3V9a7 7 0 0 1 7-7h3a7 7 0 0 1 7 7Z"/><path d="M7 8h9M7 12h6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+  </defs></svg>
+
+  <header class="topbar">
+    <a class="brand" href="./" data-i18n-label="home" aria-label="Mist home"><span class="brand-mark"><svg><use href="#i-mist"/></svg></span><strong>mist<span>.</span></strong><span class="brand-city">SYDNEY</span></a>
+    <div class="nav-title"><span class="status-dot"></span><span data-i18n="subtitle">Sydney Cooling Fog Simulator</span></div>
+    <div class="header-right"><span class="edition">SCENARIO SIMULATOR</span><button id="chat-launcher" class="chat-launcher" aria-haspopup="dialog" aria-expanded="false" aria-controls="chat-panel" data-i18n-label="chatOpen" data-i18n-title="chatOpen" aria-label="Open Mist chat"><svg aria-hidden="true"><use href="#i-chat"/></svg><span class="chat-launcher-label" data-i18n="chatLaunch">Ask Mist</span></button><button class="icon-button info-open" data-i18n-title="about" data-i18n-label="about" aria-label="About this simulator"><svg><use href="#i-info"/></svg></button></div>
+  </header>
+  <main class="workspace">
+    <div id="scene" data-i18n-label="scene" aria-label="Sydney 3D map"><div id="labels"></div></div>
+    <div id="loading" role="status"><span class="loading-orbit"></span><strong data-i18n="loading">Preparing OpenFreeMap data</strong><span data-i18n="loadingDetail">Loading buildings, streets and green spaces.</span></div>
+    <div id="webgl-error" hidden role="alert"><h2 data-i18n="webglTitle">The 3D view is unavailable</h2><p data-i18n="webglHelp">Enable hardware acceleration in a WebGL-capable browser, then try again.</p><button class="retry-button" data-i18n="retry">Try again</button></div>
+    <aside class="cooling-panel floating" data-i18n-label="placement" aria-label="Cooling fog placement">
+      <div class="panel-eyebrow"><svg><use href="#i-mist"/></svg><span data-i18n="lab">URBAN COOLING LAB</span></div>
+      <div class="cooling-heading"><h1 data-i18n="placement">Cooling fog placement</h1><span class="sample-badge" data-i18n="illustrative">Illustrative model</span><button id="inspector-toggle" aria-expanded="false" aria-controls="inspector-details" data-i18n-label="expandDetails">⌃</button></div>
+      <p class="panel-intro" data-i18n="intro">Explore heat, shade and pedestrian demand.</p>
+      <div class="candidate-heading"><span data-i18n="candidates">Candidate locations</span><span data-i18n="priority">Priority score / 100</span></div>
+      <div id="candidate-list" class="candidate-list" role="group" data-i18n-label="candidateGroup" aria-label="Cooling fog candidate locations"></div>
+      <div id="inspector-details">
+        <div class="site-details">
+          <div class="selected-heading"><strong id="selected-site">Town Hall</strong><span id="site-state" data-i18n="installed">Installed</span></div>
+          <div class="site-facts"><div><span data-i18n="flow">Pedestrian flow</span><strong id="footfall">—</strong><small data-i18n="flowUnit">people/hour</small></div><div><span data-i18n="shadeArrival">Shade arrival</span><strong id="shade-onset">—</strong><small id="shade-wait" data-i18n="shadeModel">Estimated from scene geometry</small></div></div>
+          <div class="natural-cooling"><span id="natural-label" data-i18n="naturalChange">Natural temperature change in 1 hour</span><strong id="natural-change">—</strong></div>
+        </div>
+        <div class="temperature-comparison">
+          <div class="comparison-title"><span data-i18n="streetAir">Street air temperature</span><span data-i18n="fogCentre">At the fog unit</span></div>
+          <div class="temperature-values"><div><small data-i18n="before">Before installation</small><strong><span id="temp-before">—</span><em>°C</em></strong></div><svg><use href="#i-arrow"/></svg><div class="after-temp"><small data-i18n="after">After installation</small><strong><span id="temp-after">—</span><em>°C</em></strong></div><span class="delta-badge" id="cooling-delta">—</span></div>
+        </div>
+        <div class="fog-power"><label for="power-slider" data-i18n="fogOutput">Fog output</label><strong id="power-value">65%</strong><input id="power-slider" type="range" min="0" max="100" step="5" value="65" data-i18n-label="sharedOutput" aria-label="Shared across all installed units"/><small class="output-scope" data-i18n="sharedOutput">Shared across all installed units</small><div><span><span data-i18n="radius">Cooling radius</span> <b id="fog-radius">36 m</b></span><span><span data-i18n="units">Installed units</span> <b id="install-count">1 / 3</b></span></div></div>
+      </div>
+      <div class="install-actions"><button class="primary-button" id="install-button"><svg><use href="#i-mist"/></svg><span data-i18n="install">Install here</span></button><button id="recommend-button" data-i18n="recommend" data-i18n-title="recommendTitle">Recommended location</button></div>
+      <p class="model-note" data-i18n="modelNote">Sample weather and pedestrian data. Illustrative cooling model.</p>
+    </aside>
+    <div class="scenario-switch floating" role="group" data-i18n-label="comparison" aria-label="Compare before and after installation"><button id="view-before" aria-pressed="false" data-i18n="before">Before installation</button><button id="view-after" class="selected" aria-pressed="true"><svg><use href="#i-mist"/></svg><span data-i18n="after">After installation</span></button></div>
+    <section class="weather floating" data-i18n-label="sampleWeather" aria-label="Sample weather">
+      <div class="weather-main"><div class="weather-sun"><svg id="weather-icon"><use href="#i-sun"/></svg></div><div><strong><span id="temperature">31</span>°<span>C</span></strong><small id="weather-desc" data-i18n="clear">Clear sky</small></div><span class="sample-badge" data-i18n="sample">Sample</span></div>
+      <div class="weather-detail"><span><svg><use href="#i-wind"/></svg> NE 12 km/h</span><span><span data-i18n="humidity">Humidity</span> <b id="humidity-value">42</b>%</span></div>
+      <button id="weather-toggle" class="weather-toggle" data-i18n-label="setCloudy" aria-label="Change sample weather to cloudy sky"><svg><use href="#i-cloud"/></svg><span data-i18n="showCloudy">Cloudy sky</span><span>↗</span></button>
+    </section>
+    <div class="map-location"><span class="map-live-dot"></span><strong>SYDNEY CBD</strong><span id="map-source" role="status" data-i18n="connecting">Connecting to OpenFreeMap</span></div>
+    <div class="map-controls floating" role="group" data-i18n-label="mapControls" aria-label="Map controls"><button id="zoom-in" data-i18n-label="zoomIn" data-i18n-title="zoomIn" aria-label="Zoom in">+</button><button id="zoom-out" data-i18n-label="zoomOut" data-i18n-title="zoomOut" aria-label="Zoom out">−</button><span></span><button id="reset-view" data-i18n-label="reset" data-i18n-title="reset" aria-label="Reset view"><svg><use href="#i-reset"/></svg></button><button id="top-view" data-i18n-label="top" data-i18n-title="top" aria-label="Top-down view" aria-pressed="false">2D</button></div>
+    <div class="compass" data-i18n-title="north" title="North"><span>N</span><div id="compass-arrow"><i></i><i></i></div></div>
+    <section class="timeline floating" data-i18n-label="timeline" aria-label="Time of day, temperature and shade simulation">
+      <div class="timeline-top"><div><span class="timeline-heading" data-i18n="dailyHeat">Daily heat conditions</span><span class="timeline-date" id="scenario-date-display">27 Oct 2026</span></div><span class="time-display" id="time-display">15:00</span></div>
+      <div class="timeline-controls"><button id="play-time" class="play-button" data-i18n-label="play" aria-label="Play day" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7Z"/></svg></button><div class="slider-wrap"><div class="sun-arc"><span>☀</span></div><input id="time-slider" data-i18n-label="time" aria-label="Simulation time" type="range" min="8" max="18" step="0.08333333333333333" value="15"/><div class="time-ticks"><span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span><span>18:00</span></div></div></div>
+      <div class="timeline-bottom"><span class="temperature-legend" data-i18n-label="legend" aria-label="Street air temperature: 27 to 36 degrees Celsius"><span>27°</span><i class="heat-scale"></i><span>36°C</span></span><span><i class="teal-dot"></i><span data-i18n="fogCooling">Fog cooling</span></span><span class="sun-angle"><span data-i18n="sunAltitude">Sun altitude</span> <b id="sun-altitude">—°</b></span></div>
+    </section>
+    <div class="layer-toggle floating" role="group" data-i18n-label="layers" aria-label="Map layers"><svg><use href="#i-layers"/></svg><button id="toggle-heat" class="active" aria-pressed="true" data-i18n="temperature">Temperature</button><button id="toggle-people" class="active" aria-pressed="true" data-i18n="pedestrians">Pedestrians</button><button id="toggle-trees" class="active" aria-pressed="true" data-i18n="trees" data-i18n-title="treeHint">Trees</button><button id="toggle-shadows" class="active" aria-pressed="true" data-i18n="shadows" data-i18n-title="shadowHint">Shadows</button></div>
+    <div class="bottom-caption"><span class="map-attribution"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></span><button class="info-open"><span data-i18n="dataInfo">Model &amp; data</span><svg><use href="#i-info"/></svg></button></div>
+    <div id="toast" role="status"></div>
+  </main>
+  <dialog id="info-dialog" aria-labelledby="about-heading"><button id="close-info" class="dialog-close" data-i18n-label="close" aria-label="Close">×</button><div class="dialog-eyebrow" data-i18n="aboutEyebrow">ABOUT THIS SIMULATOR</div><h2 id="about-heading" data-i18n="aboutHeading">Plan a cooler street.</h2><p data-i18n="aboutIntro"></p><label class="scenario-date-label" for="scenario-date" data-i18n="scenarioDate">Scenario date</label><input id="scenario-date" type="date" min="2000-01-01" max="2099-12-31" value="2026-10-27"/><dl><div><dt data-i18n="rankingTitle"></dt><dd data-i18n="rankingInfo"></dd></div><div><dt data-i18n="coolingTitle"></dt><dd data-i18n="coolingInfo"></dd></div><div><dt data-i18n="shadeTitle"></dt><dd data-i18n="shadeInfo"></dd></div><div><dt data-i18n="geographyTitle"></dt><dd id="map-detail" data-i18n="geographyInfo"></dd><dd data-i18n="architectureInfo"></dd></div></dl><span class="dialog-footer">OPENFREEMAP · THREE.JS · SYDNEY</span></dialog>
+  <dialog id="chat-panel" class="chat-panel" aria-labelledby="chat-title" aria-describedby="chat-note">
+    <header class="chat-header">
+      <span class="chat-avatar" aria-hidden="true"><svg><use href="#i-chat"/></svg></span>
+      <div class="chat-heading"><h2 id="chat-title" data-i18n="chatTitle">Mist assistant</h2><p data-i18n="chatSubtitle">Cooling fog &amp; city scenarios</p></div>
+      <div class="chat-header-actions"><button id="chat-clear" class="chat-icon-button" disabled data-i18n-label="chatClear" data-i18n-title="chatClear" aria-label="Clear messages"><svg aria-hidden="true"><use href="#i-reset"/></svg></button><button id="chat-close" class="chat-icon-button" data-i18n-label="chatClose" data-i18n-title="chatClose" aria-label="Close chat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    </header>
+    <div class="chat-mode"><span class="chat-mode-dot" aria-hidden="true"></span><span data-i18n="chatPreview">UI preview</span></div>
+    <div id="chat-scroll" class="chat-scroll">
+      <section id="chat-welcome" class="chat-welcome">
+        <span class="chat-welcome-mark" aria-hidden="true"><svg><use href="#i-mist"/></svg></span>
+        <h3 data-i18n="chatWelcome">What would you like to explore?</h3><p data-i18n="chatIntro">Ask about cooling fog, shade or candidate locations.</p>
+        <div class="chat-starters"><button type="button" data-chat-prompt="chatCompare"><span data-i18n="chatCompare">Compare candidate locations</span><span aria-hidden="true">↗</span></button><button type="button" data-chat-prompt="chatCooling"><span data-i18n="chatCooling">Explain the cooling estimate</span><span aria-hidden="true">↗</span></button><button type="button" data-chat-prompt="chatShade"><span data-i18n="chatShade">What changes with shade?</span><span aria-hidden="true">↗</span></button></div>
+      </section>
+      <div id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-relevant="additions" data-i18n-label="chatLog" aria-label="Conversation"></div>
+    </div>
+    <footer class="chat-footer">
+      <p id="chat-note" class="chat-note" data-i18n="chatNote">Messages stay in this tab. Agent replies are not connected in this UI preview.</p>
+      <form id="chat-form" class="chat-form">
+        <label class="chat-sr-only" for="chat-input" data-i18n="chatMessage">Your message</label>
+        <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…" data-i18n-placeholder="chatPlaceholder" aria-describedby="chat-keyboard chat-note"></textarea>
+        <button id="chat-send" type="submit" disabled data-i18n-label="chatSend" data-i18n-title="chatSend" aria-label="Send message"><svg aria-hidden="true"><use href="#i-send"/></svg></button>
+      </form>
+      <p id="chat-keyboard" class="chat-keyboard" data-i18n="chatKeyboard">Enter to send · Shift + Enter for a new line</p>
+      <p id="chat-status" class="chat-sr-only" role="status"></p>
+    </footer>
+  </dialog>
+  <script type="module" src="./chat.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

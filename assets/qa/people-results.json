@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-10-27T14:35:59.582Z",
+  "checks": [
+    "Close-up navigation reaches pedestrian scale"
+  ],
+  "errors": [],
+  "screenshots": [
+    "people-detail.png"
+  ],
+  "camera": {
+    "type": "PerspectiveCamera",
+    "position": [
+      -61.04528364961419,
+      58.98258642955469,
+      133.9667266748453
+    ],
+    "target": [
+      -49.43771974729756,
+      2,
+      148.73998982324838
+    ],
+    "zoom": 4.8828125,
+    "moving": false
+  },
+  "result": "passed"
+}

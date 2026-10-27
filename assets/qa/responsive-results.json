@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-10-27T14:19:35.204Z",
+  "checks": [
+    "Network failure loads the attributed bundled map",
+    "mobile has no horizontal scroll, overlapping panels or covered location labels",
+    "Mobile touch selection zooms to Circular Quay",
+    "Mobile sheet exposes output and retains recommendation",
+    "expandedMobile has no horizontal scroll, overlapping panels or covered location labels",
+    "Mobile top-down view preserves selection",
+    "narrowMobile has no horizontal scroll, overlapping panels or covered location labels",
+    "smallDesktop has no horizontal scroll, overlapping panels or covered location labels",
+    "Reduced motion completes camera navigation immediately",
+    "A useful English retry action appears when both data sources fail",
+    "Retry recovers after the bundled map becomes available",
+    "No relevant console or runtime errors during working scenarios"
+  ],
+  "errors": [],
+  "screenshots": [
+    "mobile.png",
+    "mobile-details.png",
+    "mobile-320.png",
+    "desktop-1024.png"
+  ],
+  "cachedMap": {
+    "mode": "snapshot",
+    "buildingParts": 2473,
+    "heatSegments": 17574,
+    "source": "https://tiles.openfreemap.org/planet/20261025_080012_pt/{z}/{x}/{y}.pbf",
+    "treeCount": 180
+  },
+  "mobile": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "expandedMobile": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "narrowMobile": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "smallDesktop": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "result": "passed"
+}

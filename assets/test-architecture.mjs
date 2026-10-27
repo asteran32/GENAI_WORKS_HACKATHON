@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import * as THREE from './dist/vendor/three.module.js';
+import { footprint, intersectsFootprintVolume } from './dist/architecture.js';
+const volume = type => {const b=new THREE.Box3(new THREE.Vector3(-5,2,-5),new THREE.Vector3(5,12,5));b.footprint=footprint(10,10,type);return b;};
+const upRay = (x,z) => new THREE.Ray(new THREE.Vector3(x,0,z),new THREE.Vector3(0,1,0));
+assert.equal(intersectsFootprintVolume(upRay(0,0),volume('rect')),true);
+assert.equal(intersectsFootprintVolume(upRay(7,7),volume('rect')),false);
+assert.equal(intersectsFootprintVolume(upRay(4.8,4.8),volume('chamfer')),false);
+assert.equal(intersectsFootprintVolume(upRay(3,3),volume('L')),false);
+assert.equal(intersectsFootprintVolume(upRay(-3,3),volume('L')),true);
+assert.equal(intersectsFootprintVolume(new THREE.Ray(new THREE.Vector3(20,6,0),new THREE.Vector3(-1,0,0)),volume('rect')),true);
+assert.equal(intersectsFootprintVolume(new THREE.Ray(new THREE.Vector3(0,20,0),new THREE.Vector3(0,1,0)),volume('rect')),false);
+assert.equal(intersectsFootprintVolume(upRay(4.9,4.9),volume('round')),false);
+console.log('8 footprint-occlusion assertions passed.');
