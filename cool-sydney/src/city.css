@@ -308,6 +308,52 @@ canvas{display:block;max-width:100%}
 .direct-label{font:500 10px var(--font-mono)}
 #hour{width:100%;margin:0;height:14px;accent-color:var(--ink);cursor:pointer}
 
+/* Mist comparison: blue means cooling reduction, with a separate temperature scale. */
+.mist-controls,.mist-results{background:#f8fcff}
+.sw-mist{background:#0284c7}
+.mist-results .segmented{margin-bottom:12px}
+.mist-results .segmented button{flex:1;min-height:32px;font-family:var(--font-ui)}
+.mist-results .segmented button[aria-pressed=true]{background:#0369a1}
+.mist-temperatures{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}
+.mist-temperatures div{display:grid;gap:5px}
+.mist-temperatures span{font-size:11px;color:var(--ink-3)}
+.mist-temperatures strong{font-size:24px;letter-spacing:-.04em}
+#mist-after,.mist-reduction{color:#0369a1}
+.mist-reduction{font-size:14px;font-weight:600;margin:12px 0}
+.mist-scale{margin:14px 0;font-size:10px;color:var(--ink-2)}
+.mist-scale div{height:8px;margin-bottom:6px;background:linear-gradient(90deg,#e0f2fe,#0369a1);border-radius:4px}
+.mist-scale[data-view=before] div,.mist-scale[data-view=after] div{background:linear-gradient(90deg,#1d4ed8 0%,#0ea5e9 30%,#f4d99c 65%,#e85d4a 100%)}
+#mist-map-legend{color:#0369a1;font-weight:600;background:#f0f9ff;padding:4px 6px;border:1px solid #7dd3fc}
+.hud-legend [hidden],#mist-manual[hidden]{display:none}
+.mist-controls .field input{width:100%;min-width:0}
+.mist-results details{font-size:11px;margin-top:12px}
+.mist-controls .btn[aria-pressed=true]{background:#e0f2fe;border-color:#0284c7;color:#075985}
+.mist-probe-card{background:#e0f2fe;border:1px solid #7dd3fc;padding:12px;margin:10px 0 16px;display:grid;gap:8px}
+.mist-probe-card[hidden]{display:none}
+.mist-probe-card b{font-size:11px;color:#075985}
+.mist-probe-card strong{font-size:16px;color:#0c4a6e}
+.mist-probe-card p{font-size:11px;margin:0;color:#334155}
+.mist-labels{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.mist-label{position:absolute;left:0;top:0;display:grid;gap:4px;background:rgba(255,255,255,.96);padding:7px 10px;border:1px solid #0284c7;border-radius:4px;box-shadow:0 2px 12px #0c4a6e20;white-space:nowrap;color:#075985}
+.mist-label[hidden]{display:none}
+.mist-label span{font-size:10px}
+.mist-label strong{font:600 12px var(--font-mono)}
+.mist-label-selected{background:#f0f9ff;border:2px solid #0284c7}
+.mist-label::after{content:'';position:absolute;left:50%;top:100%;height:18px;border-left:1px solid #0284c7}
+.fog-device-card{display:grid;gap:6px;padding:12px;border:1px solid #bae6fd;background:#f0f9ff;margin-bottom:12px;color:#0c4a6e}
+.fog-device-card strong{font-size:13px}.fog-device-card span,.fog-device-card a{font-size:11px}.fog-device-card small{font-size:10px;color:#475569}
+.fog-toolbar{pointer-events:auto;left:50%;bottom:135px;transform:translateX(-50%);width:min(440px,calc(100% - 28px));padding:12px;background:rgba(255,255,255,.97);border:1px solid #7dd3fc;border-radius:8px;box-shadow:0 4px 20px #0c4a6e20;z-index:6}
+.fog-toolbar-head{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#075985;margin-bottom:8px;flex-wrap:wrap}
+.fog-toolbar-head b{font-family:var(--font-mono)}
+.fog-tool-buttons{display:flex;gap:5px;flex-wrap:wrap}
+.fog-tool-buttons button{flex:1;padding:8px 6px;border:1px solid #cbd5e1;border-radius:4px;background:white;color:#334155;font:500 11px var(--font-ui);cursor:pointer;white-space:nowrap}
+.fog-tool-buttons button[aria-pressed=true]{background:#0369a1;color:white;border-color:#0369a1}
+.fog-tool-buttons button:disabled{opacity:.4;cursor:default}
+#fog-map-reading{font-size:12px;color:#075985;margin:9px 0 0;font-weight:600}
+.fog-inventory{display:grid;gap:5px;margin-top:10px;max-height:150px;overflow:auto}
+.fog-inventory-item{background:white;border:1px solid #cbd5e1;padding:7px;text-align:left;font-size:10px;cursor:pointer;color:#334155}
+.fog-inventory-item[aria-pressed=true]{border-color:#0284c7;background:#e0f2fe;color:#075985}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width:1180px){
   :root{--left-w:256px;--right-w:304px}

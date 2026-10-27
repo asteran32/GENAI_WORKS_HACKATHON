@@ -48,6 +48,37 @@ function validateInput(input) {
   if (!Number.isFinite(+check) || check.toISOString().slice(0, 10) !== date) throw new Error('올바른 날짜가 아닙니다.');
   return { date, hour };
 }
+// Conservative broad phase: index clipped footprint/shadow envelopes into
+// 100m cells. Exact polygon/ray tests below still decide every result.
+function spatialIndex(items, bounds, envelope, cellM = 100) {
+  const [west, south, east, north] = bounds;
+  const width = Math.max(1, Math.ceil((east - west) / cellM)), height = Math.max(1, Math.ceil((north - south) / cellM));
+  const buckets = new Map();
+  for (const item of items) {
+    const b = envelope(item);
+    if (!b || b[0] > b[2] || b[1] > b[3] || b[2] < west || b[0] > east || b[3] < south || b[1] > north) continue;
+    const x0 = Math.max(0, Math.min(width - 1, Math.floor((b[0] - west) / cellM))), x1 = Math.max(0, Math.min(width - 1, Math.floor((b[2] - west) / cellM)));
+    const y0 = Math.max(0, Math.min(height - 1, Math.floor((b[1] - south) / cellM))), y1 = Math.max(0, Math.min(height - 1, Math.floor((b[3] - south) / cellM)));
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+      const key = y * width + x;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(item);
+    }
+  }
+  const empty = [];
+  return point => {
+    if (point[0] < west || point[0] > east || point[1] < south || point[1] > north) return empty;
+    const x = Math.min(width - 1, Math.floor((point[0] - west) / cellM)), y = Math.min(height - 1, Math.floor((point[1] - south) / cellM));
+    return buckets.get(y * width + x) || empty;
+  };
+}
+function clippedBox(item) { return [Math.max(item.box[0], item.tile[0]), Math.max(item.box[1], item.tile[1]), Math.min(item.box[2], item.tile[2]), Math.min(item.box[3], item.tile[3])]; }
+function shadowBox(item, direction, tangent) {
+  if (!item.casts || !Number.isFinite(item.height)) return null;
+  const b = clippedBox(item); if (b[0] > b[2] || b[1] > b[3]) return null;
+  const dx = -direction[0] * item.height / tangent, dy = -direction[1] * item.height / tangent;
+  return [b[0] + Math.min(0, dx), b[1] + Math.min(0, dy), b[2] + Math.max(0, dx), b[3] + Math.max(0, dy)];
+}
 function simulate(snapshot, input) {
   const { date, hour } = validateInput(input);
   const instant = E.localInstant(date, hour, snapshot.area.timezone);
@@ -57,13 +88,15 @@ function simulate(snapshot, input) {
   if (sun.altitude <= 0) return { ...base, daylight: false, shadePercent: null, cells: [], samples: 0, shadedSamples: 0 };
   const { buildings, water } = prepare(snapshot), direction = [Math.sin(sun.azimuth * Math.PI / 180), Math.cos(sun.azimuth * Math.PI / 180)], tangent = Math.tan(sun.altitude * Math.PI / 180);
   const sw = project(snapshot.area.west, snapshot.area.south, snapshot.area), ne = project(snapshot.area.east, snapshot.area.north, snapshot.area);
+  const extent = [...sw, ...ne], footprints = spatialIndex([...buildings, ...water], extent, clippedBox);
+  const shadows = spatialIndex(buildings, extent, b => shadowBox(b, direction, tangent));
   let samples = 0, shadedSamples = 0; const cells = [];
   for (let x = sw[0] + 10; x < ne[0]; x += 20) for (let y = sw[1] + 10; y < ne[1]; y += 20) {
     const point = [x, y];
     const covers = object => inBox(object.box, point) && inBox(object.tile, point) && inPolygon(object.rings, point);
-    if (buildings.some(covers) || water.some(covers)) continue;
-    samples++; if (buildings.some(b => blocked(b, point, direction, tangent))) { shadedSamples++; cells.push([Math.round(x * 100) / 100, Math.round(y * 100) / 100]); }
+    if (footprints(point).some(covers)) continue;
+    samples++; if (shadows(point).some(b => blocked(b, point, direction, tangent))) { shadedSamples++; cells.push([Math.round(x * 100) / 100, Math.round(y * 100) / 100]); }
   }
   return { ...base, daylight: true, samples, shadedSamples, shadePercent: samples ? Math.round(1000 * shadedSamples / samples) / 10 : null, cells, assumptions: ['지도 렌더링 높이 사용: 실측으로 검증되지 않은 시나리오', '건물·수면을 제외한 지면 표본이며 보행 가능 공간 비율이 아닙니다.', '수목·경사·기온·습도·복사열은 미반영; 그늘 비율을 냉방 수요로 환산하지 않습니다.', '자료 범위 밖의 그림자는 누락될 수 있습니다. 낮은 태양 고도에서 영향이 커집니다.'] };
 }
-module.exports = { polygons, inPolygon, prepare, blocked, simulate, validateInput };
+module.exports = { polygons, inPolygon, prepare, blocked, simulate, validateInput, spatialIndex, clippedBox, shadowBox };

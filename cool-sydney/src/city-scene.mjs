@@ -1,4 +1,5 @@
 import * as T from '/vendor/scene-vendor.mjs';
+import { mistField, mistHeatRgb } from './mist-model.mjs';
 const R = 6371008.8, RAD = Math.PI / 180;
 const polys = g => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
 const lines = g => g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
@@ -235,6 +236,7 @@ export class CityScene {
     this.labelsRoot = document.createElement('div'); this.labelsRoot.className = 'place-labels'; this.labelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.labelsRoot);
     this.countLabelsRoot = document.createElement('div'); this.countLabelsRoot.className = 'count-labels'; this.countLabelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.countLabelsRoot);
     this.temperatureLabelsRoot = document.createElement('div'); this.temperatureLabelsRoot.className = 'temperature-labels'; this.temperatureLabelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.temperatureLabelsRoot);
+    this.mistLabelsRoot = document.createElement('div'); this.mistLabelsRoot.className = 'mist-labels'; this.mistLabelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.mistLabelsRoot); this.mistLabels = [];
     this.controls = new T.OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 60; this.controls.maxDistance = 3200; this.controls.maxPolarAngle = Math.PI * .48;
@@ -259,6 +261,8 @@ export class CityScene {
     this.scene.add(this.grid);
     this.buildings = new T.Group(); this.ground = new T.Group(); this.edges = new T.Group(); this.shades = new T.Group(); this.cells = new T.Group(); this.highlight = new T.Group();
     this.walk = new T.Group(); this.trees = new T.Group(); this.sites = new T.Group(); this.temperatures = new T.Group(); this.routes = new T.Group();
+    this.mist = new T.Group(); this.scene.add(this.mist); this.mistEnabled = false;
+    this.fogActors = []; this.fogPreview = new T.Group(); this.fogPreview.visible = false; this.scene.add(this.fogPreview);
     this.weather = new T.Group(); this.weatherData = null; this.weatherEnabled = false; this.weatherClouds = []; this.weatherRain = null; this.weatherRainBase = null; this.weatherWind = null;
     this.scene.add(this.ground, this.shades, this.cells, this.buildings, this.edges, this.walk, this.trees, this.sites, this.temperatures, this.routes, this.weather, this.highlight);
     this.shadeCasters = []; this.excluders = []; this.landmarks = []; this.focusId = null; this._ndc = new T.Vector3(); this._sun = null;
@@ -269,11 +273,17 @@ export class CityScene {
     let down = null;
     this.renderer.domElement.addEventListener('pointerdown', event => { down = [event.clientX, event.clientY]; });
     this.renderer.domElement.addEventListener('pointerup', event => {
-      if (!down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5 || !this.onMapClick || !this.area) return;
+      if (event.button !== 0 || !down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5 || !this.onMapClick || !this.area) return;
       const rect = this.renderer.domElement.getBoundingClientRect();
       const mouse = new T.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
       const ray = new T.Raycaster(); ray.setFromCamera(mouse, this.camera); const hit = new T.Vector3();
-      if (!ray.ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), 0), hit)) return;
+      if (this.mistEnabled && this.onMistObjectClick) {
+        const objectHit = ray.intersectObjects(this.mist.children,true).find(item => Number.isInteger(item.object.parent?.userData.fogIndex));
+        if (objectHit && this.onMistObjectClick(objectHit.object.parent.userData.fogIndex)) return;
+      }
+      // Mist cells are displayed on an analysis plane at y=10. Probe that same
+      // plane so a click matches the colored cell rather than a point behind it.
+      if (!ray.ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), this.useMistPickPlane?.() ? -10 : 0), hit)) return;
       const lon = this.area.longitude + hit.x / (RAD * R * Math.cos(this.area.latitude * RAD)), lat = this.area.latitude - hit.z / (RAD * R);
       if (lon >= this.area.west && lon <= this.area.east && lat >= this.area.south && lat <= this.area.north) this.onMapClick([lon, lat]);
     });
@@ -286,6 +296,7 @@ export class CityScene {
       this.scaleControlsToZoom();
       this.controls.update();
       this.animateWeather();
+      this.animateFog();
       this.updatePlaceLabels();
       this.renderer.render(this.scene, this.camera);
     });
@@ -316,6 +327,140 @@ export class CityScene {
   project(point) { return [(point[0] - this.area.longitude) * RAD * R * Math.cos(this.area.latitude * RAD), (point[1] - this.area.latitude) * RAD * R]; }
   shape(rings) { const shape = new T.Shape(rings[0].map(p => new T.Vector2(...this.project(p)))); shape.holes = rings.slice(1).map(r => new T.Path(r.map(p => new T.Vector2(...this.project(p))))); return shape; }
   clear(group) { for (const child of [...group.children]) { if (child.children.length) this.clear(child); child.geometry?.dispose(); const materials = Array.isArray(child.material) ? child.material : [child.material]; for (const material of materials) { material?.map?.dispose(); material?.dispose(); } group.remove(child); } }
+  mistGround(x, y) {
+    if (!this._mistMask) this._mistMask = this.excluders.map(rings => {
+      const xs = rings[0].map(p => p[0]), ys = rings[0].map(p => p[1]);
+      return { rings, west: Math.min(...xs), east: Math.max(...xs), south: Math.min(...ys), north: Math.max(...ys) };
+    });
+    const [west, south] = this.project([this.area.west, this.area.south]), [east, north] = this.project([this.area.east, this.area.north]);
+    if (!this._mistMaskIndex) {
+      this._mistMaskIndex = new Map();
+      for (const b of this._mistMask) {
+        for(let i=Math.floor(Math.max(west,b.west)/100);i<=Math.floor(Math.min(east,b.east)/100);i++) {
+          for(let j=Math.floor(Math.max(south,b.south)/100);j<=Math.floor(Math.min(north,b.north)/100);j++) {
+            const key=`${i}:${j}`; if(!this._mistMaskIndex.has(key))this._mistMaskIndex.set(key,[]); this._mistMaskIndex.get(key).push(b);
+          }
+        }
+      }
+    }
+    const candidates=this._mistMaskIndex.get(`${Math.floor(x/100)}:${Math.floor(y/100)}`)||[];
+    return x >= west && x <= east && y >= south && y <= north && !candidates.some(b =>
+      x >= b.west && x <= b.east && y >= b.south && y <= b.north && insideRing(b.rings[0], [x,y]) && !b.rings.slice(1).some(r => insideRing(r, [x,y])));
+  }
+  setMistBackdrop(visible) {
+    if (!this.mistBackdrop) { this.mistBackdrop=new T.Group(); this.scene?.add(this.mistBackdrop); }
+    this.mistBackdrop.visible=visible;
+    if(!visible || this.mistBackdrop.children.length || !this.area)return;
+    const [west,south]=this.project([this.area.west,this.area.south]),[east,north]=this.project([this.area.east,this.area.north]);
+    // Cached 10 m ground mask, independent of the 2 m local cooling samples.
+    const positions=[];
+    for(let x=west+5;x<east;x+=10)for(let y=south+5;y<north;y+=10)if(this.mistGround(x,y))positions.push([x,y]);
+    const geometry=new T.PlaneGeometry(10,10);geometry.rotateX(-Math.PI/2);
+    const mesh=new T.InstancedMesh(geometry,new T.MeshBasicMaterial({color:'#e85d4a',transparent:true,opacity:.65,side:T.DoubleSide,depthWrite:false,depthTest:false}),positions.length);
+    const matrix=new T.Matrix4();positions.forEach(([x,y],i)=>mesh.setMatrixAt(i,matrix.makeTranslation(x,9.9,-y)));
+    mesh.instanceMatrix.needsUpdate=true;mesh.renderOrder=17;this.mistBackdrop.add(mesh);
+  }
+  focusMist(point) {
+    const [x,y] = this.project(point);
+    this.controls.target.set(x,0,-y);
+    this.camera.position.set(x + 30, 80, -y + 45);
+    this.controls.update();
+  }
+  groundPoint(clientX, clientY) {
+    if (!this.area) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect(), ray = new T.Raycaster(), hit = new T.Vector3();
+    ray.setFromCamera(new T.Vector2((clientX-rect.left)/rect.width*2-1,1-(clientY-rect.top)/rect.height*2),this.camera);
+    if (!ray.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-10),hit)) return null;
+    const lon=this.area.longitude+hit.x/(RAD*R*Math.cos(this.area.latitude*RAD)),lat=this.area.latitude-hit.z/(RAD*R);
+    return lon>=this.area.west && lon<=this.area.east && lat>=this.area.south && lat<=this.area.north ? [lon,lat] : null;
+  }
+  setFogPreview(point) {
+    if (!this.fogPreview) return;
+    this.fogPreview.visible = !!point && this.mistEnabled;
+    if (!point) return;
+    if (!this.fogPreview.children.length) {
+      const ring=new T.Mesh(new T.RingGeometry(2.4,2.8,32),new T.MeshBasicMaterial({color:'#16a34a',side:T.DoubleSide,depthTest:false,depthWrite:false}));
+      ring.rotation.x=-Math.PI/2; ring.renderOrder=30; this.fogPreview.add(ring);
+    }
+    const [x,y]=this.project(point),valid=this.mistGround(x,y);
+    this.fogPreview.position.set(x,10.2,-y); this.fogPreview.children[0].material.color.set(valid?'#16a34a':'#dc2626');
+  }
+  animateFog() {
+    if (!this.fogActors?.length) return;
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const time = reduced ? 1200 : performance.now();
+    for (const actor of this.fogActors) {
+      const p=actor.geometry.attributes.position;
+      for(let i=0;i<p.count;i++) {
+        const phase=(time/2800+i*.618033)%1, nozzle=i%10;
+        p.setXYZ(i,.5+nozzle*.75+Math.sin(i*2.4)*phase*3,9.3-phase*8,Math.cos(i*1.9)*phase*4);
+      }
+      p.needsUpdate=true;
+    }
+  }
+  setMistScenario({ sites = [], model = null, radiusM = 12, heatSpanC = 2, view = 'delta', enabled = false, probe = null, reading = null, selected = -1, spraying = true }) {
+    if (this.mistEnabled && !enabled && this._sun) this._shadePending = this._sun;
+    this.mistEnabled = enabled;
+    this.setMistBackdrop(enabled && !!model && view !== 'delta');
+    this.shades.visible = !enabled && !!this._sun?.daytime;
+    this.cells.visible = !enabled && this.layers.cells && !this.cellsStale;
+    this.clear(this.mist);
+    this.fogActors = [];
+    this.mistLabelsRoot?.replaceChildren(); this.mistLabels = [];
+    if (!enabled || !this.area) return;
+    const addLabel = (x,y,title,detail,selected=false) => {
+      if (!this.mistLabelsRoot) return;
+      const el = document.createElement('div'), heading = document.createElement('span'), text = document.createElement('strong');
+      el.className = `mist-label${selected ? ' mist-label-selected' : ''}`;
+      heading.textContent = title; text.textContent = detail; el.append(heading,text); this.mistLabelsRoot.append(el);
+      this.mistLabels.push({ el, world:new T.Vector3(x,12,-y) });
+    };
+    const points = sites.map(point => { const [x,y] = this.project(point); return { x,y }; });
+    for (const [index, { x,y }] of points.entries()) {
+      // Enlarged schematic of the catalog's L-shaped, LED-equipped 10-nozzle pole.
+      // Dimensions and particle motion are illustrative, not product CAD/CFD.
+      const pole=new T.Group(); pole.position.set(x,10,-y); pole.userData.fogIndex=index;
+      const part=(geometry,color,position)=>{const mesh=new T.Mesh(geometry,new T.MeshBasicMaterial({color,depthTest:false,depthWrite:false}));mesh.position.set(...position);mesh.renderOrder=24;pole.add(mesh);};
+      part(new T.CylinderGeometry(1,1.3,.5,12),index===selected?'#f59e0b':'#475569',[0,.25,0]);
+      part(new T.BoxGeometry(.8,10,.8),'#64748b',[0,5,0]);
+      part(new T.BoxGeometry(8,.65,.8),'#334155',[4,10,0]);
+      part(new T.BoxGeometry(7,.15,.85),'#fef3c7',[4,9.6,0]);
+      for(let n=0;n<10;n++) part(new T.SphereGeometry(.2,6,4),'#38bdf8',[.5+n*.75,9.3,0]);
+      if (spraying && view !== 'before') {
+        const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(new Float32Array(150*3),3));
+        const spray=new T.Points(geometry,new T.PointsMaterial({color:'#bae6fd',size:.8,transparent:true,opacity:.55,depthWrite:false,depthTest:false}));
+        spray.renderOrder=23; spray.frustumCulled=false; pole.add(spray); this.fogActors.push(spray);
+      }
+      this.mist.add(pole);
+      const outline = new T.Mesh(new T.RingGeometry(radiusM - .35, radiusM, 64), new T.MeshBasicMaterial({ color: '#0284c7', side: T.DoubleSide, depthTest: false, depthWrite: false }));
+      outline.rotation.x = -Math.PI / 2; outline.position.set(x, 10, -y); outline.renderOrder = 20; this.mist.add(outline);
+      if (!probe || Math.hypot(x-this.project(probe)[0], y-this.project(probe)[1]) > 3) {
+        addLabel(x,y,`미스트 분사기 ${index + 1} · 근처 공기`,model ? `${model.beforeC.toFixed(1)} → ${model.afterC.toFixed(1)}°C` : '기상 입력 대기');
+      }
+    }
+    if (probe) {
+      const [x,y] = this.project(probe);
+      const marker = new T.Mesh(new T.RingGeometry(1,1.7,32),new T.MeshBasicMaterial({color:'#0f172a',side:T.DoubleSide,depthTest:false,depthWrite:false}));
+      marker.rotation.x=-Math.PI/2; marker.position.set(x,10.5,-y); marker.renderOrder=22; this.mist.add(marker);
+      addLabel(x,y,'선택 위치 · 공기온도 추정',reading ? `${reading.beforeC.toFixed(1)} → ${reading.afterC.toFixed(1)}°C · −${reading.dropC.toFixed(1)}°C` : '계산값 없음',true);
+    }
+    this.animateFog();
+    if (!model || view === 'before' || model.dropC < .005) return;
+    // Use identical footprints in before/after views, including zero-effect cases.
+    const referenceDrop = Math.max(.1, model.dropC);
+    const samples = mistField(points, referenceDrop, radiusM).filter(p => this.mistGround(p.x, p.y));
+    if (!samples.length) return;
+    const geometry = new T.PlaneGeometry(2, 2); geometry.rotateX(-Math.PI / 2);
+    const mesh = new T.InstancedMesh(geometry, new T.MeshBasicMaterial({ transparent: true, opacity: .8, depthWrite: false, depthTest: false, side: T.DoubleSide }), samples.length);
+    const matrix = new T.Matrix4(), pale = new T.Color('#e0f2fe'), blue = new T.Color('#0369a1');
+    samples.forEach((p, i) => {
+      const drop = p.dropC * model.dropC / referenceDrop;
+      const color = view === 'delta' ? pale.clone().lerp(blue, Math.min(1, drop / 5)) : new T.Color(`rgb(${mistHeatRgb(view === 'after' ? drop : 0,heatSpanC).join(',')})`);
+      mesh.setMatrixAt(i, matrix.makeTranslation(p.x, 10, -p.y)); mesh.setColorAt(i, color);
+    });
+    mesh.renderOrder = 19; mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
+    this.mist.add(mesh);
+  }
   clipPlanes(tile) {
     const [west, south] = this.project([tile.west, tile.south]), [east, north] = this.project([tile.east, tile.north]);
     return [new T.Plane(new T.Vector3(1, 0, 0), -west), new T.Plane(new T.Vector3(-1, 0, 0), east), new T.Plane(new T.Vector3(0, 0, -1), -south), new T.Plane(new T.Vector3(0, 0, 1), north)];
@@ -363,6 +508,12 @@ export class CityScene {
   }
   updatePlaceLabels() {
     const w = this.element.clientWidth, h = this.element.clientHeight;
+    for (const label of this.mistLabels || []) {
+      this._ndc.copy(label.world).project(this.camera);
+      const visible = this.mistEnabled && this._ndc.z > -1 && this._ndc.z < 1 && Math.abs(this._ndc.x) < .95 && Math.abs(this._ndc.y) < .9;
+      label.el.hidden = !visible;
+      if (visible) label.el.style.transform = `translate(${(this._ndc.x*.5+.5)*w}px,${(-this._ndc.y*.5+.5)*h}px) translate(-50%,-150%)`;
+    }
     const near = this.nearestLandmark();
     if (near && near.id !== this.focusId) {
       this.focusId = near.id;
@@ -410,6 +561,9 @@ export class CityScene {
     return geometry;
   }
   setData(snapshot) {
+    this._mistMask = null;
+    this._mistMaskIndex = null;
+    if(this.mistBackdrop)this.clear(this.mistBackdrop);
     this.area = snapshot.area; for (const g of [this.buildings, this.ground, this.edges, this.shades, this.cells, this.highlight, this.temperatures]) this.clear(g);
     this.temperatureSites = []; this.temperatureLabelsRoot.replaceChildren();
     this.shadeCasters = []; this.excluders = []; this.hoverId = null; this._estimateMask = null; this._shadeRaster = null;
@@ -529,7 +683,7 @@ export class CityScene {
    * The soft edge is presentation only; server ray intersections remain authoritative. */
   updateShadeAreas(sun) {
     const daylight = sun?.daytime ?? (sun && sun.altitude > 0);
-    if (!daylight || !this.shadeCasters.length) { this.shades.visible = false; return; }
+    if (this.mistEnabled || !daylight || !this.shadeCasters.length) { this.shades.visible = false; return; }
     this.shades.visible = true;
     const [west, south] = this.project([this.area.west, this.area.south]);
     const [east, north] = this.project([this.area.east, this.area.north]);
@@ -710,17 +864,17 @@ export class CityScene {
     const points = new T.Points(geometry, new T.PointsMaterial({ color: DATA_INK.cells, size: 5, sizeAttenuation: true, transparent: true, opacity: .85, depthWrite: false }));
     points.renderOrder = 2;
     this.cells.add(points);
-    this.cells.visible = this.layers.cells;
+    this.cells.visible = this.layers.cells && !this.mistEnabled;
   }
   /** Verified samples describe one instant; hide them once the clock moves away. */
-  setCellsStale(stale) { this.cells.visible = this.layers.cells && !stale; }
+  setCellsStale(stale) { this.cellsStale = stale; this.cells.visible = this.layers.cells && !stale && !this.mistEnabled; }
   setLayer(name, on) {
     if (name === 'buildings') { this.buildings.visible = on; this.edges.visible = on; return; }
     if (name === 'ground') { this.ground.visible = on; return; }
     if (name === 'walk' || name === 'trees' || name === 'sites' || name === 'temperatures') { this[name].visible = on; return; }
     this.layers[name] = on;
     if (name === 'shade') this.shades.children.forEach(m => { m.visible = on; });
-    if (name === 'cells') this.cells.visible = on;
+    if (name === 'cells') this.cells.visible = on && !this.cellsStale && !this.mistEnabled;
   }
   /** CBD walk network, street trees, and pedestrian count sites. */
   setCBDLayers(data) {
@@ -776,7 +930,7 @@ export class CityScene {
       site.el.replaceChildren();
       const name = document.createElement('span'), count = document.createElement('strong');
       name.textContent = site.name || site.id;
-      count.textContent = value == null ? '미관측' : `${value.toLocaleString('ko-KR')}회`;
+      count.textContent = value == null ? '미관측' : `${value.toLocaleString('ko-KR')}회/시간`;
       site.el.append(name, count);
       site.el.dataset.empty = String(value == null);
       site.el.title = `${site.id} · ${site.name || ''} · ${hourLabel} · ${value == null ? '유효 관측 없음' : `시간당 통과 ${value.toLocaleString('ko-KR')}회`} · 센서 위치`;

@@ -16,7 +16,7 @@ function createHandler(service, port) {
       if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) throw new ApiError(403, '다른 출처의 요청은 허용되지 않습니다.');
       const url = new URL(req.url, `http://${req.headers.host}`);
       if ((req.method === 'GET' || req.method === 'HEAD') && ['/', '/index.html'].includes(url.pathname)) return respond(200, fs.readFileSync(path.join(__dirname, 'public', 'index.html')), 'text/html; charset=utf-8');
-      const assets = { '/city.css': 'text/css; charset=utf-8', '/city-app.mjs': 'text/javascript; charset=utf-8', '/city-scene.mjs': 'text/javascript; charset=utf-8', '/sun.mjs': 'text/javascript; charset=utf-8', '/vendor/scene-vendor.mjs': 'text/javascript; charset=utf-8' };
+      const assets = { '/city.css': 'text/css; charset=utf-8', '/city-app.mjs': 'text/javascript; charset=utf-8', '/city-scene.mjs': 'text/javascript; charset=utf-8', '/sun.mjs': 'text/javascript; charset=utf-8', '/mist-model.mjs': 'text/javascript; charset=utf-8', '/vendor/scene-vendor.mjs': 'text/javascript; charset=utf-8' };
       if ((req.method === 'GET' || req.method === 'HEAD') && assets[url.pathname]) return respond(200, fs.readFileSync(path.join(__dirname, 'public', url.pathname.slice(1))), assets[url.pathname]);
       if (url.pathname === '/favicon.ico') { res.writeHead(204); return res.end(); }
       if (!url.pathname.startsWith('/api/')) throw new ApiError(404, '페이지를 찾을 수 없습니다.');

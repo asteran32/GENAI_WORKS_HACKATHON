@@ -310,6 +310,52 @@ canvas{display:block;max-width:100%}
 .direct-label{font:500 10px var(--font-mono)}
 #hour{width:100%;margin:0;height:14px;accent-color:var(--ink);cursor:pointer}
 
+/* Mist comparison: blue means cooling reduction, with a separate temperature scale. */
+.mist-controls,.mist-results{background:#f8fcff}
+.sw-mist{background:#0284c7}
+.mist-results .segmented{margin-bottom:12px}
+.mist-results .segmented button{flex:1;min-height:32px;font-family:var(--font-ui)}
+.mist-results .segmented button[aria-pressed=true]{background:#0369a1}
+.mist-temperatures{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}
+.mist-temperatures div{display:grid;gap:5px}
+.mist-temperatures span{font-size:11px;color:var(--ink-3)}
+.mist-temperatures strong{font-size:24px;letter-spacing:-.04em}
+#mist-after,.mist-reduction{color:#0369a1}
+.mist-reduction{font-size:14px;font-weight:600;margin:12px 0}
+.mist-scale{margin:14px 0;font-size:10px;color:var(--ink-2)}
+.mist-scale div{height:8px;margin-bottom:6px;background:linear-gradient(90deg,#e0f2fe,#0369a1);border-radius:4px}
+.mist-scale[data-view=before] div,.mist-scale[data-view=after] div{background:linear-gradient(90deg,#1d4ed8 0%,#0ea5e9 30%,#f4d99c 65%,#e85d4a 100%)}
+#mist-map-legend{color:#0369a1;font-weight:600;background:#f0f9ff;padding:4px 6px;border:1px solid #7dd3fc}
+.hud-legend [hidden],#mist-manual[hidden]{display:none}
+.mist-controls .field input{width:100%;min-width:0}
+.mist-results details{font-size:11px;margin-top:12px}
+.mist-controls .btn[aria-pressed=true]{background:#e0f2fe;border-color:#0284c7;color:#075985}
+.mist-probe-card{background:#e0f2fe;border:1px solid #7dd3fc;padding:12px;margin:10px 0 16px;display:grid;gap:8px}
+.mist-probe-card[hidden]{display:none}
+.mist-probe-card b{font-size:11px;color:#075985}
+.mist-probe-card strong{font-size:16px;color:#0c4a6e}
+.mist-probe-card p{font-size:11px;margin:0;color:#334155}
+.mist-labels{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.mist-label{position:absolute;left:0;top:0;display:grid;gap:4px;background:rgba(255,255,255,.96);padding:7px 10px;border:1px solid #0284c7;border-radius:4px;box-shadow:0 2px 12px #0c4a6e20;white-space:nowrap;color:#075985}
+.mist-label[hidden]{display:none}
+.mist-label span{font-size:10px}
+.mist-label strong{font:600 12px var(--font-mono)}
+.mist-label-selected{background:#f0f9ff;border:2px solid #0284c7}
+.mist-label::after{content:'';position:absolute;left:50%;top:100%;height:18px;border-left:1px solid #0284c7}
+.fog-device-card{display:grid;gap:6px;padding:12px;border:1px solid #bae6fd;background:#f0f9ff;margin-bottom:12px;color:#0c4a6e}
+.fog-device-card strong{font-size:13px}.fog-device-card span,.fog-device-card a{font-size:11px}.fog-device-card small{font-size:10px;color:#475569}
+.fog-toolbar{pointer-events:auto;left:50%;bottom:135px;transform:translateX(-50%);width:min(440px,calc(100% - 28px));padding:12px;background:rgba(255,255,255,.97);border:1px solid #7dd3fc;border-radius:8px;box-shadow:0 4px 20px #0c4a6e20;z-index:6}
+.fog-toolbar-head{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#075985;margin-bottom:8px;flex-wrap:wrap}
+.fog-toolbar-head b{font-family:var(--font-mono)}
+.fog-tool-buttons{display:flex;gap:5px;flex-wrap:wrap}
+.fog-tool-buttons button{flex:1;padding:8px 6px;border:1px solid #cbd5e1;border-radius:4px;background:white;color:#334155;font:500 11px var(--font-ui);cursor:pointer;white-space:nowrap}
+.fog-tool-buttons button[aria-pressed=true]{background:#0369a1;color:white;border-color:#0369a1}
+.fog-tool-buttons button:disabled{opacity:.4;cursor:default}
+#fog-map-reading{font-size:12px;color:#075985;margin:9px 0 0;font-weight:600}
+.fog-inventory{display:grid;gap:5px;margin-top:10px;max-height:150px;overflow:auto}
+.fog-inventory-item{background:white;border:1px solid #cbd5e1;padding:7px;text-align:left;font-size:10px;cursor:pointer;color:#334155}
+.fog-inventory-item[aria-pressed=true]{border-color:#0284c7;background:#e0f2fe;color:#075985}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width:1180px){
   :root{--left-w:256px;--right-w:304px}
@@ -348,6 +394,28 @@ canvas{display:block;max-width:100%}
 <main class="shell">
 
 <aside class="panel panel-left" aria-label="시뮬레이션 조건">
+  <section class="block mist-controls" aria-labelledby="mist-heading">
+    <h2 class="eyebrow" id="mist-heading">FEC-MP003 · 포그 배치</h2>
+    <div class="fog-device-card"><strong>FILTERTECH FEC-MP003</strong><span>ㄱ자형 · LED · 노즐 10개 · 구경 0.1 mm</span><small>구경은 물방울 입경이 아닙니다. 지도 오브젝트는 실제 치수와 다른 설명용 모형입니다.</small><a href="https://water777.co.kr/goods/view?no=189465" target="_blank" rel="noopener noreferrer">제품 사양 보기 ↗</a></div>
+    <label class="switch"><i class="swatch sw-mist"></i><span>미스트 비교 켜기</span><input type="checkbox" id="mist-enabled"></label>
+    <label class="field"><span>기온·습도 기준</span><select id="mist-source"><option value="live">현재 CBD 기상 모델</option><option value="manual">직접 입력한 가정</option></select></label>
+    <div id="mist-manual" hidden>
+      <label class="field"><span>가정 기온 (°C)</span><input id="mist-temperature" type="number" min="10" max="50" step="0.1" value="35"></label>
+      <label class="field"><span>가정 상대습도 (%)</span><input id="mist-humidity" type="number" min="0" max="100" step="1" value="50"></label>
+    </div>
+    <label class="field"><span>노즐당 유량 가정 (L/min)</span><input id="mist-nozzle-flow" type="number" min="0" max="1" step="0.001" value="0.020"></label>
+    <label class="field"><span>10노즐 합계 (L/h · 자동 계산)</span><input id="mist-water" type="number" min="0" max="600" step="any" value="12" readonly></label>
+    <p class="hint">이 모델의 압력별 유량표는 미확인입니다. 초기 0.020 L/min은 시나리오 가정이며 제조사 정격값이 아닙니다.</p>
+    <label class="field"><span>증발하는 비율 가정 (%)</span><input id="mist-evaporation" type="number" min="0" max="100" step="5" value="50"></label>
+    <label class="field"><span>혼합 공기 유량 가정 (m³/s)</span><input id="mist-airflow" type="number" min="0.1" max="100" step="0.1" value="2"></label>
+    <label class="field"><span>희석 반경 가정 (m)</span><input id="mist-radius" type="number" min="2" max="50" step="1" value="12"></label>
+    <div class="button-pair"><button class="btn btn-sm" id="mist-place" disabled>지도에 1대 배치</button><button class="btn btn-sm" id="mist-undo" disabled>마지막 배치 취소</button></div>
+    <button class="btn btn-quiet" id="mist-clear" disabled>배치 모두 지우기</button>
+    <button class="btn btn-sm" id="mist-focus" disabled>최근 분사기로 확대</button>
+    <div id="fog-inventory" class="fog-inventory" aria-label="배치한 FEC-MP003 목록"></div>
+    <p class="hint" id="mist-placement" role="status">배치 0대 · 확대 후 지면을 클릭하세요 · 최대 10대</p>
+    <p class="hint">초기 장비 수치는 예시 가정입니다. 분사량·증발 비율·공기 유량을 바꾸면 열수지 계산이 갱신됩니다. 현재 기상과 과거 보행 계수는 서로 다른 시점의 자료입니다.</p>
+  </section>
   <section class="block">
     <h2 class="eyebrow"><b>01</b> Study area</h2>
     <div class="area-card"><strong>Sydney CBD · Harbour</strong><span class="mono">NSW, AU · Australia/Sydney</span></div>
@@ -419,9 +487,17 @@ canvas{display:block;max-width:100%}
   <div class="hud hud-stamp mono" id="scenario-date">데이터 대기</div>
   <div class="hud hud-live" id="live-map-weather" hidden><span class="live-eyebrow">현재 기상 모델 · CBD 중심</span><strong class="mono" id="live-map-temperature">—</strong><span id="live-map-condition">—</span><small class="mono" id="live-map-time">—</small></div>
   <div class="hud hud-micro-date mono" id="micro-map-date" hidden></div>
+  <div class="hud fog-toolbar" aria-label="포그 배치 도구">
+    <div class="fog-toolbar-head"><b>FEC-MP003</b><span id="fog-tool-state">포그 비교를 켜고 배치하세요</span></div>
+    <div class="fog-tool-buttons" role="group" aria-label="포그 편집 모드">
+      <button type="button" id="fog-tool-add" aria-pressed="false">＋ 심기</button><button type="button" id="fog-tool-select" aria-pressed="true">선택·온도</button><button type="button" id="fog-tool-move" aria-pressed="false" disabled>이동</button><button type="button" id="fog-tool-delete" disabled>삭제</button><button type="button" id="fog-tool-toggle" aria-pressed="true">분사 켜짐</button>
+    </div>
+    <p id="fog-map-reading">심기를 누르고 지도에 분사기를 놓으세요.</p>
+  </div>
   <div class="hud hud-tools" role="group" aria-label="시점"><button id="perspective" aria-label="입체 보기">3D</button><button id="top" aria-label="위에서 보기">2D</button><button id="reset" aria-label="지도 중심으로">⌖</button></div>
   <div class="hud hud-compass" aria-label="태양 위치"><svg viewBox="-50 -50 100 100" id="compass"><circle r="44" class="c-ring"/><circle r="29.3" class="c-ring c-minor"/><circle r="14.7" class="c-ring c-minor"/><path d="M0-44V44M-44 0H44" class="c-axis"/><text y="-36" class="c-n">N</text><line id="sun-ray" x1="0" y1="0" x2="0" y2="0" class="c-ray"/><circle id="sun-dot" r="4.5" class="c-sun"/></svg><span class="mono" id="compass-label">—</span></div>
   <div class="hud hud-legend" aria-label="범례">
+    <span id="mist-map-legend" hidden></span>
     <span><i class="swatch sw-shade"></i>시간별 그림자</span><span><i class="swatch sw-cells"></i>검증 그늘 표본</span><span><i class="swatch sw-building"></i>실제 건물</span><span><i class="swatch sw-live"></i>현재 기상</span><span><i class="swatch sw-tree"></i>수관 모형</span><span><i class="swatch sw-site"></i>보행 계수</span><span><i class="swatch sw-temp"></i>기온 실측</span>
   </div>
   <div class="tooltip" id="tooltip" hidden></div>
@@ -442,6 +518,27 @@ canvas{display:block;max-width:100%}
 </section>
 
 <aside class="panel panel-right" aria-label="분석 결과">
+  <section class="block mist-results" aria-labelledby="mist-result-heading">
+    <h2 class="eyebrow" id="mist-result-heading">미스트 분사기 · 공기온도 비교</h2>
+    <div class="mist-probe-card" id="mist-probe-card" hidden aria-live="polite">
+      <b id="mist-probe-title">지도에서 온도를 확인할 지면을 클릭하세요</b>
+      <strong id="mist-probe-values" class="mono">선택 위치의 설치 전 → 설치 후</strong>
+      <p id="mist-probe-detail">공기온도 추정 · 바닥 표면온도는 아직 계산하지 않음</p>
+    </div>
+    <div class="segmented" id="mist-views" role="group" aria-label="미스트 지도 비교">
+      <button type="button" data-view="before" aria-pressed="false">설치 전</button><button type="button" data-view="after" aria-pressed="true">설치 후 열지도</button><button type="button" data-view="delta" aria-pressed="false">냉각량</button>
+    </div>
+    <p class="hint" id="mist-status" role="status">왼쪽에서 미스트 비교를 켜세요.</p>
+    <div class="mist-temperatures"><div><span>기준 공기온도</span><strong class="mono" id="mist-before">—</strong></div><span aria-hidden="true">→</span><div><span>분사기 바로 근처</span><strong class="mono" id="mist-after">—</strong></div></div>
+    <p class="mist-reduction mono" id="mist-delta">—</p>
+    <p class="hint" id="mist-energy">계산 대기</p>
+    <p class="hint" id="mist-provenance">현재 CBD 중심의 모델값 또는 직접 입력한 가정을 사용합니다.</p>
+    <div class="mist-scale" id="mist-scale" data-view="after"><div></div><span id="mist-legend">빨강은 기준 공기온도 · 파랑은 냉각 영역</span></div>
+    <label class="field"><span>열지도 색 범위 (기준 대비 °C)</span><input id="mist-heat-span" type="number" min="0.5" max="10" step="0.5" value="2"></label>
+    <p class="hint">빨강은 기준 공기온도, 파랑은 그보다 낮은 온도입니다. 색 범위는 표시만 바꾸며 계산값은 바꾸지 않습니다. 붉은 배경은 CBD 기준값을 균일하게 적용한 것으로, 거리별 실측 열지도나 위험도 판정이 아닙니다.</p>
+    <p class="hint">숫자는 장비 1대 근처의 정상상태 혼합 공기 추정치입니다. 도시 전체 평균·체감온도·실측 효과가 아닙니다.</p>
+    <details><summary>물리식과 지도 가정</summary><p class="hint">물·공기의 질량 및 엔탈피 수지로 냉각과 습도 상승을 계산하며, 습구온도에서 포화되는 한계를 적용합니다. 기압 101.325 kPa, 물 온도는 습구온도라고 가정합니다. 기온 10–50°C에서 사용합니다.</p><p class="hint">지도는 ΔT(r) = ΔT₀ × (1 − r/R)²로 희석되며 R 밖에서는 0입니다. 겹치는 장비는 가장 큰 효과 하나만 적용합니다. 반경과 증발 비율은 가정이며, 풍향·풍속·노즐 입경·건물 사이 흐름·일사에 의한 재가열은 계산하지 않습니다. 건물·수면은 표시에서 제외하지만 바람 차폐 계산은 아닙니다.</p><p class="hint">파란 셀은 2 m 간격의 평면 분석 표시입니다. 비교 중에는 기존 파란 그늘 표본을 잠시 숨깁니다. 배치는 이 탭에만 유지됩니다.</p><a href="https://energyplus.readthedocs.io/en/stable/guides/engineering-reference/16.3-evaporative-coolers.html" target="_blank" rel="noopener noreferrer">EnergyPlus · 증발 냉각 열수지</a></details>
+  </section>
   <section class="block">
     <h2 class="eyebrow"><b>07</b> Analytics</h2>
     <div class="kpi-hero card">
@@ -482,7 +579,7 @@ canvas{display:block;max-width:100%}
       <p class="hint" id="weather-result">과거 기상 자료 대기</p>
       <p class="hint" id="counts-result">보행 계수 자료 대기</p>
       <div id="count-list" class="count-list" aria-label="센서별 시간당 통과수"></div>
-      <p class="hint count-note">지도 원과 막대는 센서별 관측값만 표시합니다 · 고정 눈금 0–5,000회</p>
+      <p class="hint count-note">센서별 시간 단위 통과 계수 · 고유 인원·현재 체류 인원 아님 · 원천 시각의 구간 시작/끝은 미확인 · 고정 눈금 0–5,000회</p>
       <div class="micro-summary" id="micro-summary">거리 기온 자료 대기</div>
       <div class="micro-sites" id="micro-sites"></div>
       <p class="hint micro-source"><a href="https://research-data.westernsydney.edu.au/published/9bc62c10d22a11efab80570ec596f9e9/" target="_blank" rel="noopener noreferrer">Western Sydney University 원자료</a> · CC BY 4.0 · 센서 지점의 공기 온도</p>

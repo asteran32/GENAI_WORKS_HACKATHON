@@ -1,5 +1,6 @@
 import { CityScene } from './city-scene.mjs';
 import { sunAt, localInstant } from './sun.mjs';
+import { mistSource, mistReading, fogWaterLph, FOG_DEVICE } from './mist-model.mjs';
 window.coolSydneyBooted = true;
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -19,6 +20,7 @@ let shownObservationKey = null;
 let microMetadata = null, shownMicroKey = null;
 const microCache = new Map();
 let liveMode = true, liveWeather = null, liveRequest = null;
+let mistSites = [], mistView = 'after', mistProbe = null, mistSelected = -1, mistSpraying = true;
 const profiles = new Map(); // date → { values: (number|null)[], done }
 const verified = new Map(); // date → Map(hour → shadePercent)
 let profileJob = 0, chartHover = null;
@@ -38,6 +40,11 @@ function buttons() {
   $('route').disabled = busy || !cbd || !startPoint || !endPoint || cbd.date !== dateValue();
   for (const id of ['register','verify']) $(id).disabled = busy || !snapshot || !status?.zetaris.configured;
   $('explain').disabled = busy || !run || !status?.nvidia.configured;
+  $('mist-place').disabled = !snapshot || !$('mist-enabled').checked || mistSites.length >= 10;
+  $('mist-undo').disabled = $('mist-clear').disabled = !mistSites.length;
+  $('mist-focus').disabled = !scene || !mistSites.length;
+  $('fog-tool-add').disabled = !snapshot || mistSites.length >= 10;
+  $('fog-tool-move').disabled = $('fog-tool-delete').disabled = !$('mist-enabled').checked || !mistSites[mistSelected];
 }
 async function work(action) { if (busy) return; busy = true; buttons(); try { await action(); } catch (e) { message(e.message, true); tone($('verify-state'), 'crit', '오류'); } finally { busy = false; buttons(); if (pendingShade) { pendingShade = false; scheduleShade(); } } }
 
@@ -76,6 +83,7 @@ function paintLiveWeather() {
   scene?.setLiveWeather(liveWeather, on);
   $('live-now').setAttribute('aria-pressed', String(liveMode));
   $('live-map-weather').hidden = !on;
+  paintMist();
   if (!liveWeather) return;
   $('live-map-temperature').textContent = `${liveWeather.temperature_c.toFixed(1)}°`;
   $('live-map-condition').textContent = weatherText(liveWeather.weather_code);
@@ -91,6 +99,7 @@ async function refreshLiveWeather() {
   try { liveWeather = await liveRequest; paintLiveWeather(); }
   catch (error) {
     liveWeather = null; scene?.setLiveWeather(null, false);
+    paintMist();
     $('live-map-weather').hidden = true;
     $('live-temperature').textContent = '—';
     $('live-detail').textContent = `현재 기상 연결 오류 · ${error.message}`;
@@ -109,6 +118,99 @@ function activateLiveMode() {
   paintScenarios(); requestProfiles(); scheduleShade(); paintLiveWeather();
   if (!liveWeather) refreshLiveWeather();
   buttons();
+}
+
+function paintMist() {
+  const enabled = $('mist-enabled').checked, manual = $('mist-source').value === 'manual';
+  $('mist-manual').hidden = !manual;
+  let model = null, radiusM = 12;
+  const nozzleFlow = $('mist-nozzle-flow');
+  $('mist-water').value = nozzleFlow.value !== '' && nozzleFlow.checkValidity() ? fogWaterLph(Number(nozzleFlow.value)).toFixed(2) : '';
+  $('mist-status').textContent = '미스트 비교 꺼짐';
+  $('mist-before').textContent = $('mist-after').textContent = $('mist-delta').textContent = '—';
+  $('mist-energy').textContent = '계산 대기';
+  $('mist-provenance').textContent = manual ? '사용자가 입력한 기온·습도 가정 · 현재 관측값 아님' : '현재 CBD 기상 모델 연결 대기';
+  if (enabled) {
+    try {
+      if (!manual && !liveMode) throw new Error('현재 기상 비교는 ‘지금 시각 보기’를 누르세요. 다른 날짜는 ‘직접 입력한 가정’을 선택하세요.');
+      if (!manual && !liveWeather) throw new Error('현재 기상 없음 · 연결을 기다리거나 기온·습도를 직접 입력하세요.');
+      for (const id of ['mist-nozzle-flow','mist-water','mist-evaporation','mist-airflow','mist-radius', ...(manual ? ['mist-temperature','mist-humidity'] : [])]) {
+        if ($(id).value === '' || !$(id).checkValidity()) throw new Error('입력값의 범위와 단위를 확인하세요.');
+      }
+      radiusM = Number($('mist-radius').value);
+      model = mistSource({ temperatureC: manual ? Number($('mist-temperature').value) : liveWeather.temperature_c,
+        humidityPct: manual ? Number($('mist-humidity').value) : liveWeather.humidity_pct,
+        waterLph: mistSpraying ? Number($('mist-water').value) : 0, evaporationFraction: Number($('mist-evaporation').value) / 100,
+        airflowM3s: Number($('mist-airflow').value) });
+      $('mist-before').textContent = `${model.beforeC.toFixed(1)}°C`;
+      $('mist-after').textContent = `${model.afterC.toFixed(1)}°C`;
+      $('mist-delta').textContent = `근처 최대 감소 ${model.dropC.toFixed(1)}°C`;
+      $('mist-energy').textContent = `1대 기준 · 현열 냉각 ${model.coolingKw.toFixed(2)} kW · 증발 ${model.evaporatedLph.toFixed(1)} L/h · 혼합 후 습도 ${model.humidityAfterPct.toFixed(0)}% · 습구 한계 ${model.wetBulbC.toFixed(1)}°C`;
+      $('mist-status').textContent = `${FOG_DEVICE.model} ${mistSites.length}대 · ${mistSpraying ? '분사 켜짐' : '전체 분사 꺼짐'} · 열수지 + 가정한 희석 분포 · 현장 미보정`;
+      if (!manual) $('mist-provenance').textContent = `${liveWeather.valid_at_local.replace('T',' ')} · Open-Meteo CBD 중심 모델 · 거리별 기온 실측 아님`;
+    } catch (error) { model = null; $('mist-status').textContent = error.message; }
+  }
+  $('mist-placement').textContent = `${mistSites.length}대 배치 · ${pickMode === 'mist' ? '지면을 클릭해 연속 배치 (Esc 종료)' : pickMode === 'mist-move' ? '이동할 지면을 클릭하세요' : '분사기 선택 후 이동·삭제 · 최대 10대'}`;
+  $('mist-place').setAttribute('aria-pressed', String(pickMode === 'mist'));
+  $('mist-scale').dataset.view = mistView;
+  const heatInput = $('mist-heat-span');
+  const heatSpanC = heatInput.value !== '' && heatInput.checkValidity() ? Number(heatInput.value) : 2;
+  const legend = mistView === 'delta' ? '파란색 냉각량 · 0–5°C (5°C 이상 포화)' : model
+    ? `${(model.beforeC-heatSpanC).toFixed(1)}°C 이하 (파랑) ↔ ${model.beforeC.toFixed(1)}°C (빨강) · 기준 대비 상대 눈금`
+    : '기온 입력 대기 · 빨강은 기준 온도, 파랑은 냉각';
+  $('mist-legend').textContent = legend;
+  $('mist-map-legend').hidden = !enabled; $('mist-map-legend').textContent = `미스트 · ${legend}`;
+  for (const swatch of document.querySelectorAll('.hud-legend .sw-shade, .hud-legend .sw-cells')) swatch.parentElement.hidden = enabled;
+  for (const button of $('mist-views').children) button.setAttribute('aria-pressed', String(button.dataset.view === mistView));
+  let reading = null;
+  $('mist-probe-title').textContent = '지도에서 온도를 확인할 지면을 클릭하세요';
+  $('mist-probe-values').textContent = '선택 위치의 설치 전 → 설치 후';
+  $('mist-probe-detail').textContent = '공기온도 추정 · 바닥 표면온도는 아직 계산하지 않음';
+  if (enabled && scene && mistProbe) {
+    const [x,y] = scene.project(mistProbe);
+    const sites = mistSites.map(point => { const [x,y] = scene.project(point); return {x,y}; });
+    reading = mistReading(x,y,sites,model,radiusM);
+    $('mist-probe-title').textContent = `선택 위치 · ${mistProbe[1].toFixed(5)}, ${mistProbe[0].toFixed(5)}`;
+    if (reading) {
+      $('mist-probe-values').textContent = `${reading.beforeC.toFixed(1)}°C → ${reading.afterC.toFixed(1)}°C (−${reading.dropC.toFixed(1)}°C)`;
+      $('mist-probe-detail').textContent = `${reading.nearestM == null ? '배치된 분사기 없음' : `가장 가까운 분사기 ${reading.nearestM.toFixed(1)} m · ${reading.nearestM >= radiusM ? '가정한 영향 반경 밖' : '가정한 영향 반경 안'}`} · 공기온도 추정 · 바닥 표면온도 아님`;
+    } else $('mist-probe-values').textContent = '기온·습도 입력을 확인하세요 · 계산값 없음';
+  }
+  $('mist-probe-card').hidden = !enabled;
+  $('fog-map-reading').textContent = !enabled ? '심기를 누르면 포그 비교를 시작합니다.' : reading
+    ? `선택 위치 공기 ${reading.beforeC.toFixed(1)} → ${reading.afterC.toFixed(1)}°C · ${reading.dropC.toFixed(1)}°C 감소 (추정)`
+    : !model ? $('mist-status').textContent : '분사기를 놓거나 지면을 클릭해 온도 변화를 확인하세요.';
+  $('fog-tool-state').textContent = `${mistSites.length}/10대 · ${mistSelected >= 0 ? `${mistSelected+1}번 선택` : '미선택'} · ${pickMode === 'mist' ? '심기 모드' : pickMode === 'mist-move' ? '이동 모드' : '선택 모드'}`;
+  for (const [id, mode] of [['fog-tool-add','mist'],['fog-tool-move','mist-move'],['fog-tool-select',null]]) $(id).setAttribute('aria-pressed',String(pickMode === mode));
+  $('fog-tool-toggle').textContent = mistSpraying ? '전체 분사 ON' : '전체 분사 OFF';
+  $('fog-tool-toggle').setAttribute('aria-pressed',String(mistSpraying));
+  $('fog-inventory').replaceChildren(...mistSites.map((point,index) => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'fog-inventory-item';
+    button.setAttribute('aria-pressed',String(index === mistSelected));
+    button.textContent = `#${index+1} ${FOG_DEVICE.model} · ${point[1].toFixed(5)}, ${point[0].toFixed(5)}`;
+    button.addEventListener('click', () => { selectFog(index); scene?.focusMist(point); }); return button;
+  }));
+  scene?.setMistScenario({ sites: mistSites, model, radiusM, heatSpanC, view: mistView, enabled, probe: mistProbe, reading, selected: mistSelected, spraying: mistSpraying && Number($('mist-water').value) > 0 });
+  scene?.setFogPreview(null);
+  buttons();
+}
+
+function selectFog(index) {
+  if (!mistSites[index]) return;
+  mistSelected = index; mistProbe = mistSites[index]; pickMode = null; paintMist();
+}
+function startFogPlacement() {
+  if (!snapshot || mistSites.length >= 10) return;
+  const wasAdding = pickMode === 'mist';
+  $('mist-enabled').checked = true;
+  if ($('mist-source').value === 'live' && !liveMode) activateLiveMode();
+  pickMode = wasAdding ? null : 'mist'; paintMist();
+  message(pickMode ? '지도에서 FEC-MP003를 심을 지면을 클릭하세요. 연속 배치 후 Esc 또는 선택·온도를 누르세요.' : '선택 모드입니다. 분사기나 주변 지면을 클릭하세요.');
+}
+function removeFog(index) {
+  if (!mistSites[index]) return;
+  mistSites.splice(index,1); mistSelected = mistSites.length ? Math.min(index,mistSites.length-1) : -1;
+  mistProbe = mistSites[mistSelected] || null; pickMode = null; paintMist();
 }
 
 /** Numbers glide between states instead of jumping — reads as continuous time. */
@@ -225,7 +327,7 @@ async function loadObservations() {
     : '해당 시각의 재분석 기상 값 없음';
   const available = observed.counts.filter(c => c.passages != null);
   $('counts-result').textContent = available.length
-    ? `${hhmm(Math.floor(hour))} 현지시각 · ${available.length}개 센서 · 시간당 통과수`
+    ? `${dateValue()} ${hhmm(Math.floor(hour))} 현지시각 · ${available.length}개 센서 · 시간당 통과수 (고유 인원 아님)`
     : '해당 시각의 유효 자동 계수 없음 · 미관측 구간은 채우지 않음';
   const counts = new Map(observed.counts.map(row => [row.site_id, row]));
   $('count-list').replaceChildren(...observed.sites.map(site => {
@@ -241,10 +343,12 @@ async function loadObservations() {
   scene?.setObservations(observed, hhmm(Math.floor(hour)));
 }
 async function loadCBD() {
-  const state = await api('/api/gis/datasets'); if (!state.ready) return;
+  $('cbd-state').textContent = '저장된 수목·보행 자료를 읽고 있습니다…';
+  const state = await api('/api/gis/datasets');
+  if (!state.ready) { $('cbd-state').textContent = '수목·보행 자료가 아직 없습니다. CBD 자료 가져오기를 실행하세요.'; return; }
   const layers = await api('/api/gis/layers'); cbd = state; shownObservationKey = null; observationCache.clear();
   if (scene) scene.setCBDLayers(layers);
-  $('walk-layer').checked = true; $('tree-layer').checked = true; $('site-layer').checked = true;
+  for (const [id, layer] of [['walk-layer', 'walk'], ['tree-layer', 'trees'], ['site-layer', 'sites']]) scene?.setLayer(layer, $(id).checked);
   $('cbd-state').textContent = `${state.date} · 보행 ${layers.walk_edges.length.toLocaleString()}구간 · 나무 ${layers.trees.length.toLocaleString()}그루 · 센서 ${layers.pedestrian_sites.length}곳`;
   $('bundle-version').textContent = state.bundle_version;
   $('cbd-sources').replaceChildren(...Object.entries(state.sources).map(([name, source]) => {
@@ -492,6 +596,9 @@ $('map').addEventListener('pointermove', e => {
   pickQueued = e;
   requestAnimationFrame(() => {
     const ev = pickQueued; pickQueued = null;
+    if (['mist','mist-move'].includes(pickMode)) {
+      scene.setFogPreview(scene.groundPoint(ev.clientX,ev.clientY)); $('tooltip').hidden=true; return;
+    }
     const b = scene.pick(ev.clientX, ev.clientY), tip = $('tooltip');
     if (!b) { tip.hidden = true; return; }
     const sun = sunAt(dateValue(), hour, area()), rise = b.height - b.base;
@@ -503,13 +610,38 @@ $('map').addEventListener('pointermove', e => {
     tip.style.top = `${Math.max(8, Math.min(y + 16, box.height - tip.offsetHeight - 8))}px`;
   });
 });
-$('map').addEventListener('pointerleave', () => { $('tooltip').hidden = true; scene?.setHover(null); });
+$('map').addEventListener('pointerleave', () => { $('tooltip').hidden = true; scene?.setHover(null); scene?.setFogPreview(null); });
 
 // ── Data loading & server calls ───────────────────────────
 function wireMapPick() {
   if (!scene) return;
+  scene.useMistPickPlane = () => $('mist-enabled').checked && (!pickMode || pickMode === 'mist' || pickMode === 'mist-move');
+  scene.onMistObjectClick = index => { if (pickMode) return false; selectFog(index); return true; };
   scene.onMapClick = point => {
-    if (!pickMode) return;
+    if (!pickMode) {
+      if ($('mist-enabled').checked) {
+        const [x,y] = scene.project(point);
+        if (!scene.mistGround(x,y)) { message('건물·수면 밖의 지면을 선택하면 그 위치의 공기온도 추정을 볼 수 있습니다.'); return; }
+        mistProbe = point; paintMist();
+      }
+      return;
+    }
+    if (pickMode === 'mist' || pickMode === 'mist-move') {
+      if (pickMode === 'mist-move') {
+        if (!$('mist-enabled').checked || !mistSites[mistSelected]) { pickMode = null; paintMist(); return; }
+        const [x,y] = scene.project(point);
+        if (!scene.mistGround(x,y)) { message('건물·수면 밖으로 이동하세요.'); return; }
+        mistSites[mistSelected] = point; mistProbe = point; pickMode = null; paintMist(); message('분사기를 이동하고 온도 분포를 다시 계산했습니다.'); return;
+      }
+      if (!$('mist-enabled').checked || mistSites.length >= 10) { pickMode = null; paintMist(); return; }
+      const [x,y] = scene.project(point);
+      if (!scene.mistGround(x,y)) { message('건물·수면 밖의 지면을 선택하세요. 실제 설치 가능 여부는 별도 확인이 필요합니다.'); return; }
+      mistSites.push(point); mistSelected = mistSites.length-1; mistProbe = point;
+      if (mistSites.length >= 10) pickMode = null;
+      paintMist();
+      if (mistSites.length === 1) scene.focusMist(point);
+      message('FEC-MP003를 배치했습니다. 계속 심거나 Esc를 누른 후 주변 지면을 클릭해 온도를 비교하세요.'); return;
+    }
     if (pickMode === 'start') startPoint = point; else endPoint = point;
     pickMode = null;
     $('route-points').textContent = `출발 ${startPoint ? startPoint.map(x => x.toFixed(5)).join(', ') : '미선택'} / 도착 ${endPoint ? endPoint.map(x => x.toFixed(5)).join(', ') : '미선택'}`;
@@ -532,9 +664,13 @@ async function load() {
   const plan = await api('/api/gis/zetaris/plan'); $('sql-plan').textContent = plan.statements.map(sql => sql + ';').join('\n\n');
   const memory = await api('/api/gis/memory'); if (memory) { $('date').value = memory.constraints.date; hour = memory.constraints.hour; $('hour').value = hour; leaveLiveMode(); $('memory-state').textContent = '같은 구역·자료 버전의 관찰 조건을 복원했습니다. 전체 H-MEM 엔진 통합 전입니다.'; }
   sunDays.clear(); paintScenarios(); requestProfiles(); applySunPreview();
-  await calculate();
-  try { await loadCBD(); } catch { /* CBD optional until imported */ }
-  try { await initMicroclimate(); } catch (error) { $('micro-state').textContent = `기온 자료 오류 · ${error.message}`; }
+  // Map layers are independent of the expensive shadow calculation. A failed
+  // calculation must never prevent already-downloaded trees from appearing.
+  await Promise.all([
+    loadCBD().catch(error => { $('cbd-state').textContent = `수목·보행 자료 로드 실패 · ${error.message}`; }),
+    initMicroclimate().catch(error => { $('micro-state').textContent = `기온 자료 오류 · ${error.message}`; }),
+    calculate().catch(error => { message(`그림자 계산 실패 · ${error.message} · 지도와 수목은 별도로 표시됩니다.`, true); })
+  ]);
 }
 async function importData() {
   let polling = false;
@@ -579,6 +715,26 @@ $('hour').addEventListener('change', () => { if (cbd) loadObservations().catch(e
 $('date').addEventListener('change', onDateChange);
 $('live-now').addEventListener('click', activateLiveMode);
 $('live-layer').addEventListener('change', paintLiveWeather);
+$('mist-enabled').addEventListener('change', () => {
+  if (!$('mist-enabled').checked && ['mist','mist-move'].includes(pickMode)) pickMode = null;
+  if ($('mist-enabled').checked && $('mist-source').value === 'live') activateLiveMode();
+  paintMist();
+});
+$('mist-source').addEventListener('change', () => {
+  if ($('mist-enabled').checked && $('mist-source').value === 'live') activateLiveMode();
+  paintMist();
+});
+for (const id of ['mist-temperature','mist-humidity','mist-nozzle-flow','mist-evaporation','mist-airflow','mist-radius','mist-heat-span']) $(id).addEventListener('input', paintMist);
+for (const id of ['mist-place','fog-tool-add']) $(id).addEventListener('click',startFogPlacement);
+$('mist-undo').addEventListener('click', () => removeFog(mistSites.length-1));
+$('mist-clear').addEventListener('click', () => { mistSites = []; mistSelected = -1; mistProbe = null; if (['mist','mist-move'].includes(pickMode)) pickMode = null; paintMist(); });
+$('fog-tool-select').addEventListener('click', () => { pickMode = null; paintMist(); });
+$('fog-tool-move').addEventListener('click', () => { if (mistSites[mistSelected]) { pickMode = 'mist-move'; paintMist(); message('선택한 분사기를 옮길 지면을 클릭하세요.'); } });
+$('fog-tool-delete').addEventListener('click', () => removeFog(mistSelected));
+$('fog-tool-toggle').addEventListener('click', () => { mistSpraying = !mistSpraying; paintMist(); });
+$('mist-focus').addEventListener('click', () => { if (mistSites.length) scene?.focusMist(mistSites.at(-1)); });
+$('mist-views').addEventListener('click', event => { const button = event.target.closest('[data-view]'); if (button) { mistView = button.dataset.view; paintMist(); } });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && ['mist','mist-move'].includes(pickMode)) { pickMode = null; paintMist(); } });
 $('baseline').addEventListener('change', () => { requestProfiles(); paintComparison(); drawChart(); });
 $('import').addEventListener('click', () => work(importData));
 $('cbd-import').addEventListener('click', () => work(importCBD));
