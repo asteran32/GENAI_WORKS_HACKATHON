@@ -91,6 +91,7 @@ Water use, costs, mains connections, permits, device specifications, measured pe
 | `dist/pedestrians.js` | Instanced walkers with synchronised body, arm and leg movement |
 | `dist/pedestrian-motion.js` | Validated street segments, metric walking speeds, smooth turns and continuous travel |
 | `dist/simulation.js` | Illustrative thermal, output, radius, footfall and ranking functions |
+| `dist/chat.js`, `chat.css` | Header chat icon, responsive conversation panel and local message UI preview |
 | `dist/camera.js` | Interruptible eased camera transitions with reduced-motion support |
 | `dist/app.js` | State, scene integration, fog, heat, labels, picking and UI events |
 | `qa/browser-qa.mjs` | Real Chrome interactions, loading failures, responsive layout and screenshots |
@@ -102,3 +103,11 @@ Finished views: [Desktop](qa/desktop.png), [Mobile](qa/mobile.png), [Opera House
 The private visual-reference URL was unavailable during implementation; the supplied source, DESIGN.md and written specification guided the result.
 
 Walking-motion verification: `node test-pedestrians.mjs` covers route safety, turns, loops and whole-body instance movement. With the server running, `node qa/walking-qa.mjs` checks actual travel, layer pause/resume, crowd changes, mobile and reduced motion in Chrome. It also uses ffmpeg to generate [walking.gif](qa/walking.gif); override `FFMPEG_PATH` if needed. The latest targeted results are in [qa/walking-results.json](qa/walking-results.json). These are illustrative short back-and-forth walks on mapped segments, not destination or crowd-avoidance modelling.
+
+## Chat interface preview
+
+Select the chat icon / **Ask Mist** in the upper-right header to open the conversation panel. Type a message and press Enter or the send arrow; Shift+Enter inserts a new line. Starter questions fill the composer. Close/Escape returns focus to the icon; reopening retains messages and the unsent draft. Clear messages resets the conversation. The panel adapts to narrow and short mobile viewports and respects reduced motion.
+
+This is **UI only**: messages are held in page memory, no agent/API requests are made, and no assistant replies are generated. Reloading the page clears the preview. The panel explicitly identifies the disconnected agent. Gemini integration is outside this UI-only change.
+
+With the local server running, `node qa/chat-qa.mjs` runs the focused Chrome UI checks. See [chat-results.json](qa/chat-results.json), [desktop](qa/chat-welcome-desktop.png) and [mobile](qa/chat-mobile-390.png) evidence.

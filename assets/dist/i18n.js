@@ -38,6 +38,16 @@ export const UI = {
   shadeTitle: 'Weather, shade and trees',
   shadeInfo: 'Weather and pedestrian counts are sample inputs. Sun position uses the selected date in Australia/Sydney. Shade uses the rendered buildings, courtyard holes and Opera House roofs, plus illustrative tree canopies. Shade arrival requires at least 60% of five nearby points to be shaded and still shaded ten minutes later. Trees changes presence and calculations; Shadows changes appearance only. Natural change ends at 18:00 when less than an hour remains.',
   geographyTitle: 'Map and architecture', geographyInfo: 'OpenFreeMap building, street, water and green-space geometry.',
+  chatOpen: 'Open Mist chat', chatClose: 'Close chat', chatTitle: 'Mist assistant', chatLaunch: 'Ask Mist',
+  chatSubtitle: 'Cooling fog & city scenarios', chatPreview: 'UI preview',
+  chatWelcome: 'What would you like to explore?',
+  chatIntro: 'Ask about cooling fog, shade or candidate locations.',
+  chatCompare: 'Compare candidate locations', chatCooling: 'Explain the cooling estimate', chatShade: 'What changes with shade?',
+  chatMessage: 'Your message', chatPlaceholder: 'Type a message…', chatSend: 'Send message',
+  chatClear: 'Clear messages', chatLog: 'Conversation', chatYou: 'You',
+  chatNote: 'Messages stay in this tab. Agent replies are not connected in this UI preview.',
+  chatKeyboard: 'Enter to send · Shift + Enter for a new line',
+  chatSaved: 'Message added. Agent replies are not connected yet.', chatCleared: 'Messages cleared.',
   expandDetails: 'Expand location details', collapseDetails: 'Collapse location details',
   architectureInfo: 'Facades, roof details and park trees are stylised. The Opera House is an interpretive model at Bennelong Point, not an as-built BIM model. Terrain is flat. Candidates are illustrative public-path locations, not verified installable sites.',
   noChange: 'No change', alreadyShaded: 'Already shaded', noShade: 'No shade within this period',
@@ -62,7 +72,7 @@ export const UI = {
 export const number = value => new Intl.NumberFormat(LOCALE).format(value);
 export const decimal = value => new Intl.NumberFormat(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
 export function applyStrings(root = document) {
-  for (const [attribute, target] of [['data-i18n', 'textContent'], ['data-i18n-label', 'aria-label'], ['data-i18n-title', 'title']]) {
+  for (const [attribute, target] of [['data-i18n', 'textContent'], ['data-i18n-label', 'aria-label'], ['data-i18n-title', 'title'], ['data-i18n-placeholder', 'placeholder']]) {
     root.querySelectorAll(`[${attribute}]`).forEach(el => {
       const text = UI[el.getAttribute(attribute)];
       if (typeof text !== 'string') throw new Error(`Missing UI string: ${el.getAttribute(attribute)}`);

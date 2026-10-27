@@ -25,3 +25,9 @@ The private visual-reference URL was inaccessible. The supplied specification an
 After the walking update, the build check and all **six** test files passed. A focused real Chrome run passed **10** walking checks on desktop/mobile and with reduced motion, with no relevant console/runtime errors: [walking-results.json](walking-results.json). In the 1.4-second movement sample, visible people moved 0.41–2.03 m (mean 1.59 m). The check also sampled every walker throughout the close-up to detect building/water incursions.
 
 [Animated walking preview](walking.gif) · [Desktop](walking-desktop.png) · [Mobile](walking-mobile.png).
+
+## Chat UI preview
+
+The UI-only chat passed **32** focused Chrome checks: open/close and focus, drafts/messages retained on reopen, Enter/Shift+Enter and IME handling, empty-message prevention, safe text rendering, clear/reset, long-message scrolling, 390px/320px layouts, a short keyboard-sized viewport, reduced motion and zero agent/API requests. Existing build and six test files also passed.
+
+[Results](chat-results.json) · [Welcome / desktop](chat-welcome-desktop.png) · [Message / desktop](chat-desktop.png) · [390px mobile](chat-mobile-390.png) · [320px mobile](chat-mobile-320.png).
