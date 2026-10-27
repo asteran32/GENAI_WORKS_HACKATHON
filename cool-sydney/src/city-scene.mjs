@@ -97,6 +97,11 @@ function facadeMaterial({ color, metalness, roughness, floor, bay, glass = 0.4, 
 const LAYER_Y = { base: -8, water: 2.2, shade: 3.4, cells: 4.2, bounds: 14, roadBase: 0.35, walk: 5.5, route: 8 };
 const CANVAS = '#f8fafc';
 const DATA_INK = { shade: '#1d4ed8', cells: '#1e40af', bounds: '#1d4ed8', hover: '#1d4ed8' };
+const COOL = new T.Color('#256c9a'), WARM = new T.Color('#e6aa54'), HOT = new T.Color('#bb4035');
+function temperatureColor(celsius) {
+  const t = Math.max(0, Math.min(1, (celsius - 20) / 20));
+  return new T.Color().lerpColors(t < .5 ? COOL : WARM, t < .5 ? WARM : HOT, t < .5 ? t * 2 : (t - .5) * 2);
+}
 /** Server shadow grid (gis-shadow.js): 20 m samples starting 10 m inside the south-west corner. */
 const SAMPLE_M = 20, ESTIMATE_PX_M = 4;
 const MAX_SHADE_M = 260;
@@ -226,8 +231,10 @@ export class CityScene {
     this.renderer.toneMapping = T.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = T.SRGBColorSpace;
-    this.renderer.domElement.setAttribute('aria-label', '실제 시드니 건물과 태양 그림자를 표시하는 3차원 지도'); element.append(this.renderer.domElement);
+    this.renderer.domElement.setAttribute('aria-label', '시드니 건물, 시간별 그림자, 나무, 보행 계수, 과거 기온 관측 지점과 현재 기상 표현을 표시하는 3차원 지도'); element.append(this.renderer.domElement);
     this.labelsRoot = document.createElement('div'); this.labelsRoot.className = 'place-labels'; this.labelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.labelsRoot);
+    this.countLabelsRoot = document.createElement('div'); this.countLabelsRoot.className = 'count-labels'; this.countLabelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.countLabelsRoot);
+    this.temperatureLabelsRoot = document.createElement('div'); this.temperatureLabelsRoot.className = 'temperature-labels'; this.temperatureLabelsRoot.setAttribute('aria-hidden', 'true'); element.append(this.temperatureLabelsRoot);
     this.controls = new T.OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 60; this.controls.maxDistance = 3200; this.controls.maxPolarAngle = Math.PI * .48;
@@ -251,9 +258,12 @@ export class CityScene {
     }
     this.scene.add(this.grid);
     this.buildings = new T.Group(); this.ground = new T.Group(); this.edges = new T.Group(); this.shades = new T.Group(); this.cells = new T.Group(); this.highlight = new T.Group();
-    this.walk = new T.Group(); this.trees = new T.Group(); this.sites = new T.Group(); this.routes = new T.Group();
-    this.scene.add(this.ground, this.shades, this.cells, this.buildings, this.edges, this.walk, this.trees, this.sites, this.routes, this.highlight);
+    this.walk = new T.Group(); this.trees = new T.Group(); this.sites = new T.Group(); this.temperatures = new T.Group(); this.routes = new T.Group();
+    this.weather = new T.Group(); this.weatherData = null; this.weatherEnabled = false; this.weatherClouds = []; this.weatherRain = null; this.weatherRainBase = null; this.weatherWind = null;
+    this.scene.add(this.ground, this.shades, this.cells, this.buildings, this.edges, this.walk, this.trees, this.sites, this.temperatures, this.routes, this.weather, this.highlight);
     this.shadeCasters = []; this.excluders = []; this.landmarks = []; this.focusId = null; this._ndc = new T.Vector3(); this._sun = null;
+    this.treeCanopies = []; this.countSites = []; this._shadePending = null; this._shadePaintedAt = 0;
+    this.temperatureSites = [];
     this.layers = { shade: true, cells: true };
     this.raycaster = new T.Raycaster(); this._pointer = new T.Vector2(); this.hoverId = null; this.onMapClick = null;
     let down = null;
@@ -269,8 +279,13 @@ export class CityScene {
     });
     this.observer = new ResizeObserver(() => { const w = element.clientWidth, h = element.clientHeight; if (!w || !h) return; this.renderer.setSize(w, h); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }); this.observer.observe(element);
     this.renderer.setAnimationLoop(() => {
+      if (this._shadePending && performance.now() - this._shadePaintedAt > 130) {
+        const next = this._shadePending; this._shadePending = null;
+        this.updateShadeAreas(next); this._shadePaintedAt = performance.now();
+      }
       this.scaleControlsToZoom();
       this.controls.update();
+      this.animateWeather();
       this.updatePlaceLabels();
       this.renderer.render(this.scene, this.camera);
     });
@@ -300,7 +315,7 @@ export class CityScene {
   }
   project(point) { return [(point[0] - this.area.longitude) * RAD * R * Math.cos(this.area.latitude * RAD), (point[1] - this.area.latitude) * RAD * R]; }
   shape(rings) { const shape = new T.Shape(rings[0].map(p => new T.Vector2(...this.project(p)))); shape.holes = rings.slice(1).map(r => new T.Path(r.map(p => new T.Vector2(...this.project(p))))); return shape; }
-  clear(group) { for (const child of [...group.children]) { child.geometry?.dispose(); if (Array.isArray(child.material)) child.material.forEach(m => m.dispose()); else child.material?.dispose(); group.remove(child); } }
+  clear(group) { for (const child of [...group.children]) { if (child.children.length) this.clear(child); child.geometry?.dispose(); const materials = Array.isArray(child.material) ? child.material : [child.material]; for (const material of materials) { material?.map?.dispose(); material?.dispose(); } group.remove(child); } }
   clipPlanes(tile) {
     const [west, south] = this.project([tile.west, tile.south]), [east, north] = this.project([tile.east, tile.north]);
     return [new T.Plane(new T.Vector3(1, 0, 0), -west), new T.Plane(new T.Vector3(-1, 0, 0), east), new T.Plane(new T.Vector3(0, 0, -1), -south), new T.Plane(new T.Vector3(0, 0, 1), north)];
@@ -347,7 +362,6 @@ export class CityScene {
     return best;
   }
   updatePlaceLabels() {
-    if (!this.landmarks.length) return;
     const w = this.element.clientWidth, h = this.element.clientHeight;
     const near = this.nearestLandmark();
     if (near && near.id !== this.focusId) {
@@ -362,6 +376,22 @@ export class CityScene {
       const px = (this._ndc.x * 0.5 + 0.5) * w, py = (-this._ndc.y * 0.5 + 0.5) * h;
       place.el.style.transform = `translate(${px}px, ${py}px) translate(-50%, -120%)`;
       place.el.classList.toggle('is-near', place.id === this.focusId);
+    }
+    for (const site of this.countSites) {
+      this._ndc.copy(site.world).project(this.camera);
+      const visible = this.sites.visible && this._ndc.z > -1 && this._ndc.z < 1 && Math.abs(this._ndc.x) <= .96 && Math.abs(this._ndc.y) <= .88;
+      site.el.hidden = !visible;
+      if (visible) site.el.style.transform = `translate(${(this._ndc.x * .5 + .5) * w}px, ${(-this._ndc.y * .5 + .5) * h}px) translate(-50%, -120%)`;
+    }
+    const centre = this.controls.target;
+    const closest = new Set(this.temperatureSites.slice().sort((a, b) =>
+      (a.x - centre.x) ** 2 + (a.y + centre.z) ** 2 - (b.x - centre.x) ** 2 - (b.y + centre.z) ** 2,
+    ).slice(0, 8));
+    for (const site of this.temperatureSites) {
+      this._ndc.copy(site.world).project(this.camera);
+      const visible = this.temperatures.visible && closest.has(site) && this._ndc.z > -1 && this._ndc.z < 1 && Math.abs(this._ndc.x) <= .94 && Math.abs(this._ndc.y) <= .87;
+      site.el.hidden = !visible;
+      if (visible) site.el.style.transform = `translate(${(this._ndc.x * .5 + .5) * w}px, ${(-this._ndc.y * .5 + .5) * h}px) translate(-50%, -125%)`;
     }
   }
   extrudeBuilding(shape, height, base) {
@@ -380,9 +410,11 @@ export class CityScene {
     return geometry;
   }
   setData(snapshot) {
-    this.area = snapshot.area; for (const g of [this.buildings, this.ground, this.edges, this.shades, this.cells, this.highlight]) this.clear(g);
-    this.shadeCasters = []; this.excluders = []; this.hoverId = null; this._estimateMask = null;
+    this.area = snapshot.area; for (const g of [this.buildings, this.ground, this.edges, this.shades, this.cells, this.highlight, this.temperatures]) this.clear(g);
+    this.temperatureSites = []; this.temperatureLabelsRoot.replaceChildren();
+    this.shadeCasters = []; this.excluders = []; this.hoverId = null; this._estimateMask = null; this._shadeRaster = null;
     this.tuneAtmosphere();
+    this.setLiveWeather(this.weatherData, this.weatherEnabled);
     this.buildLandmarks();
     const groups = new Map();
     const addGroup = (key, meta, geometry) => {
@@ -401,7 +433,6 @@ export class CityScene {
         // Same exclusions as the server sampler: every building and water polygon.
         if (building || layer === 'water') this.excluders.push(coordinates.map(ring => ring.map(point => this.project(point))));
         if (!building && !water && !green) continue;
-        if (building && !known) continue;
         const shape = this.shape(coordinates);
         if (known) {
           const geometry = this.extrudeBuilding(shape, h, base);
@@ -414,6 +445,10 @@ export class CityScene {
           });
           const style = buildingStyle(h);
           addGroup(`${p.source_tile}:b-${style.key}`, { p, building: true, known: true, style, kind: 'building', color: style.color }, geometry);
+          continue;
+        }
+        if (building) {
+          addGroup(`${p.source_tile}:b-unknown`, { p, building: true, known: false, kind: 'building-unknown', color: '#eef1f3' }, this.extrudeBuilding(shape, .4, 0));
           continue;
         }
         if (water) {
@@ -488,68 +523,70 @@ export class CityScene {
     const a = this.area, points = [[a.west,a.south],[a.east,a.south],[a.east,a.north],[a.west,a.north],[a.west,a.south]].map(p => { const [x,y] = this.project(p); return new T.Vector3(x, LAYER_Y.bounds, -y); });
     this.ground.add(new T.Line(new T.BufferGeometry().setFromPoints(points), new T.LineDashedMaterial({ color: DATA_INK.bounds, dashSize: 24, gapSize: 12, transparent: true, opacity: 0.6 })).computeLineDistances());
     this.reset();
-    if (this._sun) this.updateShadeAreas(this._sun);
+    if (this._sun) { this._shadePending = null; this.updateShadeAreas(this._sun); }
   }
-  /**
-   * Soft grey ground shade: roof tip + wall-cast strips only (no footprint).
-   * depthTest on so opaque buildings occlude shade — no “shadow through walls”.
-   */
+  /** Rasterise the union of projected roofs and wall strips before a small blur.
+   * The soft edge is presentation only; server ray intersections remain authoritative. */
   updateShadeAreas(sun) {
-    this.clear(this.shades);
     const daylight = sun?.daytime ?? (sun && sun.altitude > 0);
-    if (!daylight || !this.shadeCasters.length) return;
-    const altitudeDeg = Math.max(sun.altitude, 2);
-    const altitude = altitudeDeg * RAD;
-    const azimuth = sun.azimuth * RAD;
-    const scale = 1 / Math.tan(altitude);
-    const geometries = [];
-    const flat = ring => {
-      const shape = new T.Shape(ring.map(p => new T.Vector2(p[0], p[1])));
-      const geometry = new T.ShapeGeometry(shape);
-      geometry.rotateX(-Math.PI / 2);
-      geometry.translate(0, LAYER_Y.shade, 0);
-      return geometry;
-    };
-    for (const b of this.shadeCasters) {
-      const rise = Math.max(b.height - b.base, 0.5);
-      const drop = Math.min(rise * scale, MAX_SHADE_M);
-      if (drop < 0.8) continue;
-      const ox = -Math.sin(azimuth) * drop, oy = -Math.cos(azimuth) * drop;
-      const ring = [];
-      for (const [x, y] of b.ring) {
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-        if (ring.length && Math.hypot(x - ring[0][0], y - ring[0][1]) < 1e-6) continue;
-        ring.push([x, y]);
-      }
-      if (ring.length < 3) continue;
-      const tip = ring.map(([x, y]) => [x + ox, y + oy]);
-      geometries.push(flat(tip));
-      for (let i = 0; i < ring.length; i++) {
-        const a = ring[i], c = ring[(i + 1) % ring.length];
-        geometries.push(flat([a, c, tip[(i + 1) % tip.length], tip[i]]));
-      }
+    if (!daylight || !this.shadeCasters.length) { this.shades.visible = false; return; }
+    this.shades.visible = true;
+    const [west, south] = this.project([this.area.west, this.area.south]);
+    const [east, north] = this.project([this.area.east, this.area.north]);
+    const spanX = east - west, spanY = north - south;
+    const metresPerPixel = Math.max(2.5, spanX / 1400, spanY / 1400);
+    const width = Math.ceil(spanX / metresPerPixel), height = Math.ceil(spanY / metresPerPixel);
+    if (!this._shadeRaster || this._shadeRaster.width !== width || this._shadeRaster.height !== height) {
+      this.clear(this.shades);
+      const mask = document.createElement('canvas'); mask.width = width; mask.height = height;
+      const softened = document.createElement('canvas'); softened.width = width; softened.height = height;
+      const texture = new T.CanvasTexture(softened); texture.colorSpace = T.SRGBColorSpace;
+      const material = new T.MeshBasicMaterial({
+        color: DATA_INK.shade, map: texture, transparent: true, opacity: .33,
+        depthWrite: false, depthTest: true, side: T.DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      });
+      const mesh = new T.Mesh(new T.PlaneGeometry(spanX, spanY), material);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set((west + east) / 2, LAYER_Y.shade, -(south + north) / 2);
+      mesh.renderOrder = 1;
+      this.shades.add(mesh);
+      this._shadeRaster = { width, height, mask, softened, texture, mesh, ctx: mask.getContext('2d'), soft: softened.getContext('2d') };
     }
-    if (!geometries.length) return;
-    const merged = T.mergeGeometries(geometries);
-    geometries.forEach(g => g.dispose());
-    if (!merged) return;
-    const material = new T.MeshBasicMaterial({
-      color: DATA_INK.shade,
-      transparent: true,
-      opacity: 0.2,
-      depthWrite: false,
-      depthTest: true,
-      side: T.DoubleSide,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2,
-      // Overlapping wall strips would stack alpha; stencil paints each pixel once.
-      stencilWrite: true, stencilRef: 1, stencilFunc: T.NotEqualStencilFunc, stencilZPass: T.ReplaceStencilOp,
-    });
-    const mesh = new T.Mesh(merged, material);
-    mesh.renderOrder = 1;
+    const { mask, texture, mesh, ctx, soft } = this._shadeRaster;
+    ctx.clearRect(0, 0, width, height);
+    const px = x => (x - west) / metresPerPixel, py = y => (north - y) / metresPerPixel;
+    const draw = ring => {
+      ctx.beginPath();
+      ring.forEach(([x, y], i) => i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y)));
+      ctx.closePath(); ctx.fill();
+    };
+    const azimuth = sun.azimuth * RAD;
+    const scale = 1 / Math.tan(Math.max(sun.altitude, 2) * RAD);
+    ctx.fillStyle = '#fff';
+    for (const b of this.shadeCasters) {
+      const ring = b.ring.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+      if (ring.length < 3) continue;
+      if (Math.hypot(ring[0][0] - ring.at(-1)[0], ring[0][1] - ring.at(-1)[1]) < 1e-6) ring.pop();
+      const shift = height => Math.min(height * scale, MAX_SHADE_M);
+      const lo = shift(b.base), hi = shift(b.height);
+      const from = ring.map(([x, y]) => [x - Math.sin(azimuth) * lo, y - Math.cos(azimuth) * lo]);
+      const tip = ring.map(([x, y]) => [x - Math.sin(azimuth) * hi, y - Math.cos(azimuth) * hi]);
+      draw(tip);
+      for (let i = 0; i < ring.length; i++) draw([from[i], from[(i + 1) % ring.length], tip[(i + 1) % ring.length], tip[i]]);
+    }
+    // Modelled crowns read as softer, lighter ground shade than solid buildings.
+    ctx.fillStyle = 'rgba(255,255,255,.50)';
+    for (const tree of this.treeCanopies) {
+      const drop = Math.min(tree.height * .7 * scale, MAX_SHADE_M);
+      const x = px(tree.x - Math.sin(azimuth) * drop), y = py(tree.y - Math.cos(azimuth) * drop);
+      ctx.beginPath(); ctx.ellipse(x, y, tree.radius / metresPerPixel, tree.radius / metresPerPixel * .82, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    soft.clearRect(0, 0, width, height);
+    soft.filter = `blur(${Math.max(1.2, 3.2 / metresPerPixel).toFixed(1)}px)`;
+    soft.drawImage(mask, 0, 0);
+    texture.needsUpdate = true;
     mesh.visible = this.layers.shade;
-    this.shades.add(mesh);
   }
   setSunLight(sun) {
     if (!sun) return;
@@ -566,10 +603,101 @@ export class CityScene {
     // Soft day curve — brightest vs dim daylight contrast stays mild.
     const day = daylight ? Math.min(1, Math.max(0, sun.altitude / 75)) : 0;
     // Night dims only slightly: this is a drafting view, not a render.
-    this.sun.intensity = daylight ? 1.2 + day * 0.3 : 0.15;
+    const cloudFactor = this.weatherEnabled && this.weatherData ? 1 - this.weatherData.cloud_cover_pct / 100 * .24 : 1;
+    this.sun.intensity = daylight ? (1.2 + day * 0.3) * cloudFactor : 0.15;
     this.hemi.intensity = daylight ? 1.45 : 1.15;
     this.ambient.intensity = daylight ? 0.85 : 0.75;
-    this.updateShadeAreas(sun);
+    this._shadePending = sun;
+  }
+  /** One CBD model point controls a uniform ambient tint and illustrative weather particles. */
+  setLiveWeather(weather, enabled = true) {
+    this.weatherData = weather;
+    this.weatherEnabled = !!enabled && !!weather;
+    this.clear(this.weather); this.weatherClouds = []; this.weatherRain = null; this.weatherRainBase = null; this.weatherWind = null;
+    this.scene.background = new T.Color(CANVAS);
+    this.scene.fog.color.set(CANVAS);
+    if (!this.weatherEnabled || !this.area) { if (this._sun) this.setSunLight(this._sun); return; }
+    const span = this.areaSpan(), cloud = weather.cloud_cover_pct / 100;
+    const tint = temperatureColor(weather.temperature_c);
+    const backdrop = new T.Color(CANVAS).lerp(tint, .07);
+    this.scene.background = backdrop; this.scene.fog.color.copy(backdrop);
+    const plane = new T.Mesh(new T.PlaneGeometry(span * 1.1, span * 1.1), new T.MeshBasicMaterial({ color: tint, transparent: true, opacity: .11, depthWrite: false, side: T.DoubleSide }));
+    plane.rotation.x = -Math.PI / 2; plane.position.y = LAYER_Y.base + .4; plane.renderOrder = 0; this.weather.add(plane);
+    const cloudCount = Math.round(cloud * 7);
+    for (let i = 0; i < cloudCount; i++) {
+      const cluster = new T.Group(), width = 85 + (i % 3) * 24;
+      for (let j = 0; j < 3; j++) {
+        const puff = new T.Mesh(new T.SphereGeometry(1, 12, 8), new T.MeshBasicMaterial({ color: '#dbe6ed', transparent: true, opacity: .16 + cloud * .11, depthWrite: false }));
+        puff.scale.set(width * (j === 1 ? .75 : .56), 8 + j * 3, width * .25);
+        puff.position.set((j - 1) * width * .48, j * 2, (j % 2) * 12);
+        cluster.add(puff);
+      }
+      cluster.position.set((i * 0.618 % 1 - .5) * span, 155 + (i % 3) * 35, (i * .381 % 1 - .5) * span);
+      this.weather.add(cluster); this.weatherClouds.push(cluster);
+    }
+    if (weather.wind_speed_kmh >= 5) {
+      const angle = weather.wind_direction_deg * RAD, vx = -Math.sin(angle), vz = Math.cos(angle);
+      const positions = new Float32Array(28 * 6);
+      for (let i = 0; i < 28; i++) {
+        const x = (Math.random() - .5) * span, z = (Math.random() - .5) * span, y = 18 + (i % 4) * 8;
+        positions.set([x, y, z, x + vx * 34, y, z + vz * 34], i * 6);
+      }
+      const geometry = new T.BufferGeometry(); geometry.setAttribute('position', new T.BufferAttribute(positions, 3));
+      this.weatherWind = new T.LineSegments(geometry, new T.LineBasicMaterial({ color: '#548fb5', transparent: true, opacity: .27, depthWrite: false }));
+      this.weather.add(this.weatherWind);
+    }
+    if (weather.precipitation_mm > 0) {
+      const count = Math.min(650, Math.max(140, Math.round(180 + weather.precipitation_mm * 95)));
+      const positions = new Float32Array(count * 6), base = new Float32Array(count * 2);
+      for (let i = 0; i < count; i++) {
+        const x = (Math.random() - .5) * span, z = (Math.random() - .5) * span, y = 10 + Math.random() * 190;
+        base.set([x, z], i * 2); positions.set([x, y, z, x + 4, y - 17, z + 2], i * 6);
+      }
+      const geometry = new T.BufferGeometry(); geometry.setAttribute('position', new T.BufferAttribute(positions, 3));
+      this.weatherRain = new T.LineSegments(geometry, new T.LineBasicMaterial({ color: '#458bb5', transparent: true, opacity: .37, depthWrite: false }));
+      this.weatherRainBase = base; this.weather.add(this.weatherRain);
+    }
+    this._weatherFrame = performance.now();
+    if (this._sun) this.setSunLight(this._sun);
+  }
+  animateWeather() {
+    if (!this.weatherEnabled || !this.area || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const now = performance.now(), dt = Math.min(.05, Math.max(0, (now - (this._weatherFrame || now)) / 1000));
+    this._weatherFrame = now;
+    const wind = (this.weatherData.wind_direction_deg || 0) * RAD, speed = this.weatherData.wind_speed_kmh / 3.6;
+    const dx = -Math.sin(wind) * speed * dt * 1.5, dz = Math.cos(wind) * speed * dt * 1.5, span = this.areaSpan();
+    for (const cloud of this.weatherClouds) {
+      cloud.position.x += dx; cloud.position.z += dz;
+      if (cloud.position.x > span * .6) cloud.position.x -= span * 1.2;
+      if (cloud.position.x < -span * .6) cloud.position.x += span * 1.2;
+      if (cloud.position.z > span * .6) cloud.position.z -= span * 1.2;
+      if (cloud.position.z < -span * .6) cloud.position.z += span * 1.2;
+    }
+    if (this.weatherWind) {
+      const attr = this.weatherWind.geometry.attributes.position, positions = attr.array;
+      for (let i = 0; i < positions.length; i += 6) {
+        positions[i] += dx * 3; positions[i + 3] += dx * 3;
+        positions[i + 2] += dz * 3; positions[i + 5] += dz * 3;
+        if (positions[i] > span * .5) { positions[i] -= span; positions[i + 3] -= span; }
+        if (positions[i] < -span * .5) { positions[i] += span; positions[i + 3] += span; }
+        if (positions[i + 2] > span * .5) { positions[i + 2] -= span; positions[i + 5] -= span; }
+        if (positions[i + 2] < -span * .5) { positions[i + 2] += span; positions[i + 5] += span; }
+      }
+      attr.needsUpdate = true;
+    }
+    if (!this.weatherRain) return;
+    const attr = this.weatherRain.geometry.attributes.position, positions = attr.array;
+    for (let i = 0; i < this.weatherRainBase.length / 2; i++) {
+      const k = i * 6, y = positions[k + 1] - dt * 145;
+      positions[k + 1] = y < 5 ? 190 : y; positions[k + 4] = positions[k + 1] - 17;
+      positions[k] += dx * 2; positions[k + 3] += dx * 2;
+      positions[k + 2] += dz * 2; positions[k + 5] += dz * 2;
+      if (positions[k] > span * .5) { positions[k] -= span; positions[k + 3] -= span; }
+      if (positions[k] < -span * .5) { positions[k] += span; positions[k + 3] += span; }
+      if (positions[k + 2] > span * .5) { positions[k + 2] -= span; positions[k + 5] -= span; }
+      if (positions[k + 2] < -span * .5) { positions[k + 2] += span; positions[k + 5] += span; }
+    }
+    attr.needsUpdate = true;
   }
   /** Server-verified shaded samples (20 m grid) as plotted points. */
   setRun(run) {
@@ -589,7 +717,7 @@ export class CityScene {
   setLayer(name, on) {
     if (name === 'buildings') { this.buildings.visible = on; this.edges.visible = on; return; }
     if (name === 'ground') { this.ground.visible = on; return; }
-    if (name === 'walk' || name === 'trees' || name === 'sites') { this[name].visible = on; return; }
+    if (name === 'walk' || name === 'trees' || name === 'sites' || name === 'temperatures') { this[name].visible = on; return; }
     this.layers[name] = on;
     if (name === 'shade') this.shades.children.forEach(m => { m.visible = on; });
     if (name === 'cells') this.cells.visible = on;
@@ -597,6 +725,7 @@ export class CityScene {
   /** CBD walk network, street trees, and pedestrian count sites. */
   setCBDLayers(data) {
     for (const group of [this.walk, this.trees, this.sites, this.routes]) this.clear(group);
+    this.treeCanopies = []; this.countSites = []; this.countLabelsRoot.replaceChildren();
     const vertices = [];
     for (const edge of data.walk_edges || []) for (const point of edge.geometry.coordinates) {
       const [x, y] = this.project(point); vertices.push(x, LAYER_Y.walk, -y);
@@ -606,14 +735,85 @@ export class CityScene {
       geometry.setAttribute('position', new T.Float32BufferAttribute(vertices, 3));
       this.walk.add(new T.LineSegments(geometry, new T.LineBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: .7, depthWrite: false })));
     }
-    const markers = (rows, group, color, radius) => {
-      if (!rows?.length) return;
-      const geometry = new T.SphereGeometry(radius, 6, 4), material = new T.MeshBasicMaterial({ color }), mesh = new T.InstancedMesh(geometry, material, rows.length), matrix = new T.Matrix4();
-      rows.forEach((row, i) => { const [x, y] = this.project([row.lon, row.lat]); matrix.makeTranslation(x, radius, -y); mesh.setMatrixAt(i, matrix); });
-      mesh.instanceMatrix.needsUpdate = true; group.add(mesh);
-    };
-    markers(data.trees, this.trees, '#22c55e', 2.5);
-    markers(data.pedestrian_sites, this.sites, '#f59e0b', 6);
+    const trees = (data.trees || []).filter(row => Number.isFinite(row.lon) && Number.isFinite(row.lat));
+    if (trees.length) {
+      const crowns = new T.InstancedMesh(new T.IcosahedronGeometry(1, 1), new T.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, side: T.DoubleSide }), trees.length);
+      const trunks = new T.InstancedMesh(new T.CylinderGeometry(.16, .22, 1, 5), new T.MeshStandardMaterial({ color: '#827f71', roughness: 1 }), trees.length);
+      const matrix = new T.Matrix4(), color = new T.Color();
+      trees.forEach((row, i) => {
+        const [x, y] = this.project([row.lon, row.lat]);
+        const h = Math.max(3, Math.min(40, row.height_m || 8));
+        const radius = row.canopy_diameter_m != null ? Math.max(.6, row.canopy_diameter_m / 2) : 1.15;
+        const crownY = h * .71, crownH = Math.max(1.6, h * .29);
+        matrix.makeScale(radius, crownH, radius); matrix.setPosition(x, crownY, -y); crowns.setMatrixAt(i, matrix);
+        matrix.makeScale(1, h * .51, 1); matrix.setPosition(x, h * .255, -y); trunks.setMatrixAt(i, matrix);
+        color.set(['#3e765e', '#4c8467', '#5d906c', '#3d8068'][i % 4]); crowns.setColorAt(i, color);
+        if (row.canopy_diameter_m != null) this.treeCanopies.push({ x, y, height: h, radius });
+      });
+      crowns.instanceMatrix.needsUpdate = trunks.instanceMatrix.needsUpdate = true;
+      crowns.instanceColor.needsUpdate = true;
+      crowns.frustumCulled = trunks.frustumCulled = false;
+      this.trees.add(trunks, crowns);
+    }
+    this.siteValues = new T.Group(); this.sites.add(this.siteValues);
+    for (const row of data.pedestrian_sites || []) {
+      const [x, y] = this.project([row.lon, row.lat]);
+      const ring = new T.Mesh(new T.RingGeometry(4.3, 6.1, 32), new T.MeshBasicMaterial({ color: '#b45309', side: T.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, LAYER_Y.walk + .5, -y); this.sites.add(ring);
+      const el = document.createElement('div'); el.className = 'count-label'; el.textContent = `${row.name || row.id} · —`;
+      this.countLabelsRoot.append(el);
+      this.countSites.push({ ...row, x, y, el, world: new T.Vector3(x, 11, -y) });
+    }
+    if (this._sun) { this._shadePending = this._sun; this._shadePaintedAt = 0; }
+  }
+  /** Each disc belongs to a measured site; size uses one fixed square-root scale. */
+  setObservations(observed, hourLabel = '') {
+    if (!this.siteValues) return;
+    this.clear(this.siteValues);
+    const counts = new Map((observed?.counts || []).map(row => [row.site_id, row]));
+    for (const site of this.countSites) {
+      const row = counts.get(site.id), value = row?.passages;
+      site.el.replaceChildren();
+      const name = document.createElement('span'), count = document.createElement('strong');
+      name.textContent = site.name || site.id;
+      count.textContent = value == null ? '미관측' : `${value.toLocaleString('ko-KR')}회`;
+      site.el.append(name, count);
+      site.el.dataset.empty = String(value == null);
+      site.el.title = `${site.id} · ${site.name || ''} · ${hourLabel} · ${value == null ? '유효 관측 없음' : `시간당 통과 ${value.toLocaleString('ko-KR')}회`} · 센서 위치`;
+      if (value == null) continue;
+      const radius = 3 + 13 * Math.sqrt(Math.min(value, 5000) / 5000);
+      const disc = new T.Mesh(new T.CircleGeometry(radius, 40), new T.MeshBasicMaterial({ color: '#d97706', transparent: true, opacity: .72, side: T.DoubleSide, depthWrite: false }));
+      disc.rotation.x = -Math.PI / 2; disc.position.set(site.x, LAYER_Y.walk + .7, -site.y);
+      this.siteValues.add(disc);
+    }
+  }
+  /** Historical near-surface air temperature is drawn only at measured logger points. */
+  setTemperatureLayer(observed) {
+    this.clear(this.temperatures);
+    this.temperatureSites = []; this.temperatureLabelsRoot.replaceChildren();
+    if (!observed?.ready || !this.area) return;
+    const ringGeometry = new T.RingGeometry(5.7, 8.2, 24);
+    const capGeometry = new T.CylinderGeometry(5, 5, 1.4, 16);
+    const stemGeometry = new T.CylinderGeometry(.55, .55, 7, 6);
+    for (const row of observed.sites) {
+      if (row.temperature_c == null) continue;
+      const [x, y] = this.project([row.lon, row.lat]), color = temperatureColor(row.temperature_c);
+      const ring = new T.Mesh(ringGeometry.clone(), new T.MeshBasicMaterial({ color, transparent: true, opacity: .48, side: T.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, LAYER_Y.walk + 1.1, -y);
+      const stem = new T.Mesh(stemGeometry.clone(), new T.MeshBasicMaterial({ color: '#365064' }));
+      stem.position.set(x, 10.5, -y);
+      const cap = new T.Mesh(capGeometry.clone(), new T.MeshBasicMaterial({ color, side: T.DoubleSide }));
+      cap.position.set(x, 14.5, -y);
+      this.temperatures.add(ring, stem, cap);
+      const el = document.createElement('div'); el.className = 'temperature-label';
+      el.style.setProperty('--temp-color', color.getStyle());
+      const value = document.createElement('strong'), street = document.createElement('span');
+      value.textContent = `${row.temperature_c.toFixed(1)}°`; street.textContent = row.street;
+      el.append(value, street); el.title = `${row.street}, ${row.suburb} · ${observed.reference_date} ${String(observed.hour).padStart(2, '0')}:00 AEDT · ${row.temperature_c.toFixed(1)}°C · ${row.samples}개 10분 관측 평균`;
+      this.temperatureLabelsRoot.append(el);
+      this.temperatureSites.push({ x, y, el, world: new T.Vector3(x, 17, -y) });
+    }
+    ringGeometry.dispose(); capGeometry.dispose(); stemGeometry.dispose();
   }
   /** Fastest (amber) vs lower-exposure (cyan) walk routes as raised ribbons. */
   setRoutes(result) {

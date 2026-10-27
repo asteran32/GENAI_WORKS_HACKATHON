@@ -9,10 +9,12 @@ const { createStore } = require('./src/memory');
 const integrations = require('./integrations');
 const { createGISStore } = require('./gis-store');
 const { createCBDStore } = require('./cbd-store');
+const { createMicroclimateStore } = require('./microclimate-store');
+const { createLiveWeather } = require('./live-weather');
 const { createZetarisGIS } = require('./zetaris-gis');
 class ApiError extends Error { constructor(status, message) { super(message); this.status = status; } }
 function atomicJSON(file, body) { const temp = `${file}.${randomUUID()}.tmp`; fs.writeFileSync(temp, JSON.stringify(body, null, 2), { mode: 0o600 }); fs.renameSync(temp, file); }
-function createService({ directory, env = process.env, transport = fetch } = {}) {
+function createService({ directory, env = process.env, transport = fetch, weatherNow } = {}) {
   const data = createDataset(), root = directory || path.join(__dirname, '..', 'data', 'cool-sydney');
   for (const folder of ['runs', 'jobs', 'scenarios', 'processed']) fs.mkdirSync(path.join(root, folder), { recursive: true });
   const file = (folder, id) => path.join(root, folder, `${id}.json`);
@@ -24,7 +26,7 @@ function createService({ directory, env = process.env, transport = fetch } = {})
   const persistMemory = () => atomicJSON(memoryFile, memory.state);
   const scope = { areaId: data.areaId, datasetVersion: data.version };
   const queue = [], workers = new Set(), explanations = new Map();
-  const gis = createGISStore(root, { env, transport }), cbd = createCBDStore(root, { env, transport, gis }), zetarisGIS = createZetarisGIS(root, env, transport);
+  const gis = createGISStore(root, { env, transport }), cbd = createCBDStore(root, { env, transport, gis }), microclimate = createMicroclimateStore(root), liveWeather = createLiveWeather({ transport, now: weatherNow }), zetarisGIS = createZetarisGIS(root, env, transport);
   let gisRunning = false;
   let running = false, closed = false;
   // Interrupted jobs must not remain stuck in a fake running state after restart.
@@ -59,11 +61,22 @@ function createService({ directory, env = process.env, transport = fetch } = {})
   }
   async function dispatch(method, route, body, searchParams = new URLSearchParams()) {
     if (closed) throw new ApiError(503, '서버가 종료 중입니다.');
-    if (method === 'GET' && route === '/api/status') return { app: 'cool-sydney', solverVersion: 'gis-shade-0.3', gis: gis.metadata(), cbd: cbd.metadata(), ...integrations.configuration(env) };
+    if (method === 'GET' && route === '/api/status') return { app: 'cool-sydney', solverVersion: 'gis-shade-0.3', gis: gis.metadata(), cbd: cbd.metadata(), microclimate: microclimate.metadata(), ...integrations.configuration(env) };
+    if (method === 'GET' && route === '/api/weather/current') {
+      try { return await liveWeather.get(); }
+      catch (error) { throw new ApiError(502, `현재 기상 정보를 가져오지 못했습니다: ${error.message}`); }
+    }
     if (route.startsWith('/api/gis/')) {
       try {
         if (method === 'GET' && route === '/api/gis/status') return gis.metadata();
         if (method === 'GET' && route === '/api/gis/data') return await gis.get();
+        if (method === 'GET' && route === '/api/gis/microclimate/metadata') return microclimate.metadata();
+        if (method === 'GET' && route === '/api/gis/microclimate') {
+          const hourText = searchParams.get('hour');
+          const hour = hourText === null || hourText.trim() === '' ? NaN : Number(hourText);
+          try { return microclimate.at(searchParams.get('date'), hour); }
+          catch (error) { if (error instanceof RangeError) throw new ApiError(422, error.message); throw error; }
+        }
         if (method === 'POST' && route === '/api/gis/import') { await gis.load(); return gis.metadata(); }
         if (method === 'GET' && route === '/api/gis/datasets') {
           const state = cbd.metadata();

@@ -20,6 +20,19 @@ cd cool-sydney
 npm run import:cbd -- 2025-01-15
 ```
 
+**거리 기온 실측 레이어:** Western Sydney University의 [2023–24 여름 미기후 원자료](https://research-data.westernsydney.edu.au/published/9bc62c10d22a11efab80570ec596f9e9/)에서 `Stream1_Temperature_Sydney_20231209_20240306.csv`를 받아 `data/cool-sydney/raw/microclimate/`에 두고 아래 명령을 실행합니다. 다른 위치에 받았다면 CSV 절대 경로를 명령 끝에 전달합니다. 이 작업은 현재 시나리오 날짜와 별도로 선택할 수 있는 실측 기준일의 시간별 평균을 준비합니다. 데이터가 이미 준비된 작업공간에서는 재수집이 필요 없습니다.
+
+```bash
+cd cool-sydney
+npm run import:microclimate
+```
+
+지도에서 **거리 기온 관측 지점**을 켜고 **기온 실측 기준일**을 고르면 선택한 시각의 측정 지점만 색과 °C로 표시합니다. 기본 기준일은 `2024-01-26`입니다. 시뮬레이터 날짜가 `2025-01-15`여도 실측 기준일은 그대로 유지되며 지도와 패널에 별도로 표시됩니다. 날짜를 합쳐 같은 날의 온도라고 해석하거나 측정하지 않은 거리로 기온을 보간하지 않습니다.
+
+**현재 기상 시뮬레이션:** 서버가 [Open-Meteo 현재 기상 API](https://open-meteo.com/en/docs)의 CBD 중심 좌표(`-33.8665, 151.208`)를 조회해 2m 기온·체감온도·습도·구름량·강수·10m 바람을 표시합니다. 저장된 관찰 조건이 없으면 첫 화면은 시드니 현재 날짜·15분 단위 시각으로 열립니다. **지금 시각 보기**를 누르면 언제든 현재 시각과 태양·그림자를 다시 맞춥니다. 날짜나 타임라인을 수동으로 바꾸면 현재 기상 표현은 꺼집니다. **캔버스 기상 표현** 스위치로 현재 시각의 균일한 기온 색조, 구름, 비, 바람 이동을 끌 수 있습니다. 서버는 성공 응답을 10분 캐시하고 화면은 10분마다 다시 요청합니다. API 오류 또는 90분 이상 어긋난 값은 현재값으로 그리지 않습니다. 첫 호출과 정기 갱신에는 서버 인터넷 접근이 필요합니다.
+
+Open-Meteo 현재 조건은 기상 모델 자료이며 현장 관측소의 실측이나 거리별 온도 지도는 아닙니다. 강수량은 API 응답의 이전 15분 합계이고 입자 효과는 이를 설명하는 시각 표현입니다. 구름 표현은 그림자 판정이나 경로 계산의 입력으로 사용하지 않습니다. 과거 거리 센서값은 별도의 실측 날짜를 선택해야 표시됩니다.
+
 Zetaris가 설치된 환경에서는 아래 명령으로 공개 GIS 폴더의 읽기 전용 마운트를 적용하고 웹서버를 실행할 수 있습니다. 기존 driver/api 컨테이너가 재생성될 수 있으나 볼륨을 삭제하지 않습니다.
 
 ```bash
@@ -42,12 +55,26 @@ OpenFreeMap / OpenMapTiles / OpenStreetMap
 OSM 원본 노드·웨이 + City of Sydney 수목/계수 + Open-Meteo ERA5
   → Node 수집기: 원본 JSON 캐시·품질 검사·버전 묶음
   → PyArrow: 보행 노드/엣지·수목·센서 GeoParquet, 계수/기상 Parquet
-  ├→ Three.js: 보행망·수목·센서 지점
+  ├→ Three.js: 보행망·입체 수관·센서별 시간당 계수
   ├→ CBD worker: 최단시간·저노출 후보, 건물/수목 경로 그림자
   └→ 화면: 원천·가정·관측/재분석 구분
+
+Western Sydney University Stream 1 (2023-12-09–2024-03-06)
+  → 10분 간격 공기 온도 CSV · 센서 좌표/거리명
+  → CBD 지도 범위와 설치 상태 검사 · 시간별 평균(유효 10분값 4개 이상)
+  → 독립된 실측 기준일 레이어 · 지점별 온도 표시
+
+Open-Meteo Forecast API / current (시드니 CBD 중심 좌표)
+  → Node 프록시: 현재값 시각·범위 검증, 10분 메모리 캐시
+  → 현재 시각 모드: 기온 색조·구름·강수·풍향 애니메이션
+  → 출처·유효 시각 표시; 과거 센서/그늘 수치에 혼합하지 않음
 ```
 
 현재 지도 형상과 그림자 계산 입력은 **로컬 Parquet에서 읽습니다**. Zetaris는 같은 파일을 가상 테이블로 조회하고 집계 결과를 대시보드에 반환합니다. 지도 전체 형상을 Zetaris SQL을 통해 가져오는 구현은 아닙니다.
+
+미기후 자료는 별도 버전의 로컬 JSON 묶음으로 읽습니다. 현재 가져온 CSV에서 지도 범위 내 유효 센서 **29곳**, 10분 시각 **12,816개**, 유효한 센서별 시간평균 **59,280행**을 검증했습니다. 이 값은 보통 지상 2.5–3m의 나무 설치 센서에서 측정한 **공기 온도**이며 포장면 온도나 모든 보행 구간의 온도가 아닙니다. CSV는 공식 자료 포털의 직접 다운로드가 이 환경에서 HTTP 403을 반환해 공개 CSV의 텍스트 프록시 사본으로 확보했습니다. 원본 바이트 해시와의 일치 여부는 확인되지 않았으며, 이 경로와 입력 해시는 묶음 manifest에 기록했습니다. [연구 보고서](https://www.cityofsydney.nsw.gov.au/research-reports/mapping-summer-microclimates)의 지점 좌표·기간과 비교했습니다.
+
+지도는 높이를 가진 건물과 높이가 없는 건물의 낮은 평면 형상을 구분해 그립니다. 선택 시각의 태양 위치로 건물 그림자와 가정한 수관 그림자를 투영하고, 화면에서만 경계를 약 3m 부드럽게 표현합니다. 그늘 비율과 경로 노출의 기준 계산은 서버 값을 사용합니다. 나무는 수고와 가정한 수관 직경을 반영한 입체 모형입니다. 센서 4곳의 시간당 통과수는 위치별 원과 이름·수치, 우측 고정 눈금 막대로 표시합니다. 원 크기는 0–5,000회에 고정하며 그 이상은 최대 크기로 표시합니다. 시간 재생 중에는 해당 현지 시각의 관측값을 갱신하고, 자료 날짜가 다르거나 유효값이 없으면 미관측으로 표시합니다. 이 계수는 도로 전체에 보간하지 않고 경로 비용에도 사용하지 않습니다.
 
 ```text
 data/cool-sydney/
@@ -65,6 +92,9 @@ data/cool-sydney/
   raw/cbd/{walk,trees,sites,counts,weather}/  # CBD 원본 JSON 캐시
   processed/bundles/current.json             # 검증된 CBD 묶음 포인터
   processed/bundles/cbd-<hash>/              # 4개 GeoParquet + 2개 Parquet + manifest
+  raw/microclimate/Stream1_Temperature_...csv # WSU 공개 10분 기온 원자료
+  processed/microclimate/current.json         # 실측 기온 묶음 포인터
+  processed/microclimate/micro-<hash>/         # 시간평균 JSON + 출처·품질 manifest
   runs/<id>.json               # 날짜·태양·그늘 표본·데이터 버전
   memory.json                  # 출처·버전별 관찰 조건
 ```
@@ -76,6 +106,10 @@ Zetaris 컨테이너에서는 `processed/`가 `/home/zetaris/customer-data/share
 ## CBD 분석 계약과 구현 범위
 
 `GET /api/gis/datasets`는 현재 묶음과 자료별 출처·행 수·품질을 반환합니다. `GET /api/gis/layers`는 지도에 필요한 보행 선형·수목·센서 지점을 반환합니다. `GET /api/gis/observations?instant=<UTC ISO>`는 선택 시간의 실제 자동 계수와 ERA5 재분석 값을 구분해 반환합니다. `POST /api/gis/routes`는 출발·도착 경위도, UTC 출발 시각, `standard`/`step_free` 프로필과 `max_detour_minutes`를 받습니다. 결과는 `GET /api/runs/<id>`로 다시 읽을 수 있습니다.
+
+`GET /api/gis/microclimate/metadata`는 독립된 실측 기간과 출처를 반환합니다. `GET /api/gis/microclimate?date=2024-01-26&hour=14`는 선택한 **원자료 날짜·AEDT 시각**에 유효한 센서별 시간평균을 반환합니다. 같은 화면의 시뮬레이터 날짜·그림자·경로 계산에는 이 과거 기온을 대입하지 않습니다.
+
+`GET /api/weather/current`는 서버가 검증한 Open-Meteo 현재 모델값, 현지/UTC 유효 시각, 가져온 시각, 기상 격자 좌표와 출처를 반환합니다. 시뮬레이터는 현재 시각일 때만 이 값으로 캔버스 대기 효과를 켭니다.
 
 보행 연결은 OSM 웨이의 공유 노드와 층위/다리/터널 태그를 따릅니다. 차도 중심선만 있는 구간은 보도 위치 미확인으로 표시하고 노출 시간을 `unknown_minutes`에 둡니다. `step_free`는 계단을 제외한 **후보** 구간이며 현장 검증을 거친 무장애 경로가 아닙니다. 저노출 경로는 여러 가중치로 탐색한 후보 중 우회 한도 안에서 고른 결과로, 전역 최적을 보장하지 않습니다. 경로는 약 4m 간격으로 표본화하고 출발 뒤 경과 시간에 따라 태양 위치를 갱신합니다.
 

@@ -14,6 +14,11 @@ const SCENARIOS = [
 let scene, snapshot, run, status, busy = false, shadeTimer = null, pendingShade = false;
 let hour = 14, playing = false, speed = 1, lastFrame = 0;
 let cbd = null, pickMode = null, startPoint = null, endPoint = null, routeRun = null;
+const observationCache = new Map();
+let shownObservationKey = null;
+let microMetadata = null, shownMicroKey = null;
+const microCache = new Map();
+let liveMode = true, liveWeather = null, liveRequest = null;
 const profiles = new Map(); // date → { values: (number|null)[], done }
 const verified = new Map(); // date → Map(hour → shadePercent)
 let profileJob = 0, chartHover = null;
@@ -55,6 +60,56 @@ function estimateNow(date, h) {
   return sun.daytime ? (entry.values[i] = scene.estimateShade(sun)) : null;
 }
 const verifiedAt = (date, h) => verified.get(date)?.get(h) ?? null;
+
+const weatherText = code => code === 0 ? '맑음' : code <= 2 ? '약간 흐림' : code === 3 ? '흐림'
+  : code <= 48 ? '안개' : code <= 57 ? '이슬비' : code <= 67 ? '비'
+    : code <= 77 ? '눈' : code <= 82 ? '소나기' : code <= 86 ? '눈 소나기' : '뇌우';
+function sydneyNow() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date()).map(part => [part.type, part.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: +parts.hour + Math.floor(+parts.minute / 15) / 4 };
+}
+function paintLiveWeather() {
+  const on = liveMode && $('live-layer').checked && !!liveWeather;
+  scene?.setLiveWeather(liveWeather, on);
+  $('live-now').setAttribute('aria-pressed', String(liveMode));
+  $('live-map-weather').hidden = !on;
+  if (!liveWeather) return;
+  $('live-map-temperature').textContent = `${liveWeather.temperature_c.toFixed(1)}°`;
+  $('live-map-condition').textContent = weatherText(liveWeather.weather_code);
+  $('live-map-time').textContent = `${liveWeather.valid_at_local.replace('T', ' ')} · Open-Meteo`;
+  $('live-temperature').textContent = `${liveWeather.temperature_c.toFixed(1)}°C`;
+  $('live-detail').textContent = `${weatherText(liveWeather.weather_code)} · 체감 ${liveWeather.apparent_temperature_c.toFixed(1)}°C · 습도 ${liveWeather.humidity_pct}% · 구름 ${liveWeather.cloud_cover_pct}% · 비 ${liveWeather.precipitation_mm.toFixed(1)}mm/${Math.round(liveWeather.interval_seconds / 60)}분 · 바람 ${liveWeather.wind_speed_kmh.toFixed(1)}km/h / ${Math.round(liveWeather.wind_direction_deg)}°`;
+  $('live-provenance').textContent = `${liveWeather.valid_at_local.replace('T', ' ')} 현지시각 · Open-Meteo 모델 현재값 · 거리별 실측 아님`;
+  $('live-state').textContent = liveMode ? `현재 시각 연결 · ${liveWeather.valid_at_local.slice(11)} 모델값 · 10분마다 갱신` : '시나리오 시각 선택 중 · 현재 기상 표현 중지';
+}
+async function refreshLiveWeather() {
+  if (liveRequest) return liveRequest;
+  liveRequest = api('/api/weather/current');
+  try { liveWeather = await liveRequest; paintLiveWeather(); }
+  catch (error) {
+    liveWeather = null; scene?.setLiveWeather(null, false);
+    $('live-map-weather').hidden = true;
+    $('live-temperature').textContent = '—';
+    $('live-detail').textContent = `현재 기상 연결 오류 · ${error.message}`;
+    $('live-provenance').textContent = 'API 연결 후 자동으로 다시 시도합니다.';
+    $('live-state').textContent = '현재 기상 연결 오류 · 10분 뒤 다시 시도';
+  } finally { liveRequest = null; }
+}
+function leaveLiveMode() {
+  if (!liveMode) return;
+  liveMode = false; paintLiveWeather();
+}
+function activateLiveMode() {
+  pause(); liveMode = true;
+  const now = sydneyNow(); $('date').value = now.date; hour = now.hour; $('hour').value = hour;
+  $('micro-layer').checked = false; scene?.setLayer('temperatures', false); $('micro-map-date').hidden = true;
+  paintScenarios(); requestProfiles(); scheduleShade(); paintLiveWeather();
+  if (!liveWeather) refreshLiveWeather();
+  buttons();
+}
 
 /** Numbers glide between states instead of jumping — reads as continuous time. */
 const tweens = new WeakMap();
@@ -140,6 +195,7 @@ function instant() {
   return new Date(stamp).toISOString();
 }
 function onDateChange() {
+  leaveLiveMode();
   paintScenarios(); requestProfiles(); scheduleShade();
   if (cbd) loadObservations().catch(e => message(e.message, true));
   buttons();
@@ -149,20 +205,44 @@ async function loadObservations() {
   if (!cbd || cbd.date !== dateValue()) {
     $('weather-result').textContent = '이 날짜의 CBD 자료를 가져오세요.';
     $('counts-result').textContent = '관측일과 선택 날짜가 다릅니다.';
+    $('count-list').replaceChildren();
+    scene?.setObservations(null);
+    shownObservationKey = `unavailable:${dateValue()}`;
     return;
   }
-  const observed = await api(`/api/gis/observations?instant=${encodeURIComponent(instant())}`), weather = observed.weather;
+  const key = `${cbd.bundle_version}:${cbd.date}:${Math.floor(hour)}`;
+  if (key === shownObservationKey) return;
+  shownObservationKey = key;
+  $('counts-result').textContent = '선택 시각의 센서 관측값을 읽는 중…';
+  if (!observationCache.has(key)) observationCache.set(key, api(`/api/gis/observations?instant=${encodeURIComponent(instant())}`));
+  let observed;
+  try { observed = await observationCache.get(key); }
+  catch (error) { observationCache.delete(key); if (shownObservationKey === key) shownObservationKey = null; throw error; }
+  if (shownObservationKey !== key) return;
+  const weather = observed.weather;
   $('weather-result').textContent = weather
     ? `ERA5 (${weather.grid_lat?.toFixed(2)}, ${weather.grid_lon?.toFixed(2)}) · ${weather.temperature_c?.toFixed(1) ?? '—'}°C · 습도 ${weather.humidity_pct ?? '—'}% · 풍속 ${weather.wind_m_s ?? '—'}m/s · 일사 ${weather.shortwave_w_m2 ?? '—'}W/m²`
     : '해당 시각의 재분석 기상 값 없음';
   const available = observed.counts.filter(c => c.passages != null);
   $('counts-result').textContent = available.length
-    ? `자동 계수 ${available.length}곳 · ${available.map(c => `${c.site_id} ${c.passages.toLocaleString()}회`).join(' / ')}`
+    ? `${hhmm(Math.floor(hour))} 현지시각 · ${available.length}개 센서 · 시간당 통과수`
     : '해당 시각의 유효 자동 계수 없음 · 미관측 구간은 채우지 않음';
+  const counts = new Map(observed.counts.map(row => [row.site_id, row]));
+  $('count-list').replaceChildren(...observed.sites.map(site => {
+    const row = counts.get(site.id), value = row?.passages;
+    const item = document.createElement('div'), label = document.createElement('span'), meter = document.createElement('i'), number = document.createElement('strong');
+    item.className = 'count-row';
+    label.textContent = site.name || site.id;
+    meter.style.setProperty('--level', `${value == null ? 0 : Math.min(100, value / 5000 * 100)}%`);
+    number.textContent = value == null ? '—' : value.toLocaleString('ko-KR');
+    item.append(label, meter, number);
+    return item;
+  }));
+  scene?.setObservations(observed, hhmm(Math.floor(hour)));
 }
 async function loadCBD() {
   const state = await api('/api/gis/datasets'); if (!state.ready) return;
-  const layers = await api('/api/gis/layers'); cbd = state;
+  const layers = await api('/api/gis/layers'); cbd = state; shownObservationKey = null; observationCache.clear();
   if (scene) scene.setCBDLayers(layers);
   $('walk-layer').checked = true; $('tree-layer').checked = true; $('site-layer').checked = true;
   $('cbd-state').textContent = `${state.date} · 보행 ${layers.walk_edges.length.toLocaleString()}구간 · 나무 ${layers.trees.length.toLocaleString()}그루 · 센서 ${layers.pedestrian_sites.length}곳`;
@@ -190,6 +270,47 @@ async function importCBD() {
   } finally { clearInterval(timer); }
 }
 
+async function loadMicroclimate() {
+  if (!microMetadata?.ready || !scene) return;
+  const date = $('micro-date').value, selectedHour = Math.floor(hour);
+  const key = `${microMetadata.version}:${date}:${selectedHour}`;
+  if (key === shownMicroKey) return;
+  shownMicroKey = key;
+  if (!microCache.has(key)) microCache.set(key, api(`/api/gis/microclimate?date=${encodeURIComponent(date)}&hour=${selectedHour}`));
+  let observed;
+  try { observed = await microCache.get(key); }
+  catch (error) { microCache.delete(key); if (shownMicroKey === key) shownMicroKey = null; throw error; }
+  if (shownMicroKey !== key) return;
+  scene.setTemperatureLayer(observed);
+  scene.setLayer('temperatures', $('micro-layer').checked);
+  const timeLabel = `${date} ${String(selectedHour).padStart(2, '0')}:00 AEDT`;
+  $('micro-map-date').textContent = `기온 실측 · ${timeLabel}`;
+  $('micro-map-date').hidden = !$('micro-layer').checked;
+  $('micro-summary').textContent = observed.observed_sites
+    ? `${timeLabel} · ${observed.observed_sites}곳 · ${observed.minimum_c.toFixed(1)}–${observed.maximum_c.toFixed(1)}°C`
+    : `${timeLabel} · 유효 관측 없음`;
+  const valid = observed.sites.filter(site => site.temperature_c != null).sort((a, b) => b.temperature_c - a.temperature_c);
+  const examples = [valid[0], valid[Math.floor(valid.length / 2)], valid.at(-1)].filter(Boolean);
+  $('micro-sites').replaceChildren(...examples.map(site => {
+    const line = document.createElement('div'), name = document.createElement('span'), value = document.createElement('strong');
+    name.textContent = `${site.street} · ${site.suburb}`;
+    value.textContent = `${site.temperature_c.toFixed(1)}°C`;
+    line.append(name, value); return line;
+  }));
+}
+async function initMicroclimate() {
+  microMetadata = await api('/api/gis/microclimate/metadata');
+  if (!microMetadata.ready) {
+    $('micro-state').textContent = '기온 CSV가 없습니다. README의 가져오기 명령을 실행하세요.';
+    $('micro-summary').textContent = '거리 기온 원자료 대기';
+    return;
+  }
+  $('micro-date').min = microMetadata.start_date; $('micro-date').max = microMetadata.end_date;
+  if ($('micro-date').value < microMetadata.start_date || $('micro-date').value > microMetadata.end_date) $('micro-date').value = microMetadata.start_date;
+  $('micro-state').textContent = `WSU 실측 ${microMetadata.site_count}곳 · ${microMetadata.start_date}–${microMetadata.end_date} · 10분 관측의 시간평균`;
+  await loadMicroclimate();
+}
+
 /** Live map shadows follow the clock immediately; the server value refreshes after debounce. */
 function applySunPreview() {
   const { date } = time(), sun = sunAt(date, hour, area()), day = sunDay(date);
@@ -206,6 +327,8 @@ function applySunPreview() {
   paintCompass(sun);
   if (scene && snapshot) { scene.setSunLight(sun); scene.setCellsStale(!isVerifiedNow()); }
   paintVerification(); paintComparison(); drawChart();
+  if (cbd && shownObservationKey !== `${cbd.bundle_version}:${cbd.date}:${Math.floor(hour)}` && shownObservationKey !== `unavailable:${dateValue()}`) loadObservations().catch(e => message(e.message, true));
+  if (microMetadata?.ready && shownMicroKey !== `${microMetadata.version}:${$('micro-date').value}:${Math.floor(hour)}`) loadMicroclimate().catch(e => message(e.message, true));
 }
 function scheduleShade() {
   applySunPreview();
@@ -340,8 +463,8 @@ function chartTip(e) {
   const box = $('day-chart').getBoundingClientRect(), x = e.clientX - box.left;
   tip.style.left = `${x + 12 + 180 > box.width ? x - 12 - tip.offsetWidth : x + 12}px`; tip.style.top = '4px';
 }
-$('day-svg').addEventListener('pointerdown', e => { dragging = true; $('day-svg').setPointerCapture(e.pointerId); pause(); setHour(chartHour(e)); });
-$('day-svg').addEventListener('pointermove', e => { chartTip(e); if (dragging) setHour(chartHour(e)); });
+$('day-svg').addEventListener('pointerdown', e => { dragging = true; $('day-svg').setPointerCapture(e.pointerId); pause(); leaveLiveMode(); setHour(chartHour(e)); });
+$('day-svg').addEventListener('pointermove', e => { chartTip(e); if (dragging) { leaveLiveMode(); setHour(chartHour(e)); } });
 $('day-svg').addEventListener('pointerup', () => { dragging = false; });
 $('day-svg').addEventListener('pointerleave', () => { chartHover = null; $('chart-tip').hidden = true; drawChart(); });
 new ResizeObserver(() => drawChart()).observe($('day-chart'));
@@ -355,7 +478,7 @@ function frame(now) {
   $('hour').value = hour; applySunPreview();
   requestAnimationFrame(frame);
 }
-function play() { if (!snapshot) return; playing = true; $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', '일시정지'); lastFrame = performance.now(); requestAnimationFrame(frame); }
+function play() { if (!snapshot) return; leaveLiveMode(); playing = true; $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', '일시정지'); lastFrame = performance.now(); requestAnimationFrame(frame); }
 function pause() { if (!playing) return; playing = false; $('play').textContent = '▶'; $('play').setAttribute('aria-label', '재생'); setHour(hour); }
 $('play').addEventListener('click', () => playing ? pause() : play());
 for (const b of $('speeds').children) b.addEventListener('click', () => { speed = Number(b.dataset.speed); for (const o of $('speeds').children) o.setAttribute('aria-pressed', String(o === b)); });
@@ -398,6 +521,7 @@ async function load() {
   if (!scene) scene = new CityScene($('map'), { onPlace: place => { $('place-focus').textContent = place.focused ? `포커스 · ${place.name}` : `보는 곳 · ${place.name}`; } });
   wireMapPick();
   scene.setData(data); snapshot = data; $('map-empty').hidden = true;
+  paintLiveWeather();
   for (const [id, layer] of [['buildings', 'buildings'], ['layer-shade', 'shade'], ['layer-cells', 'cells'], ['layer-ground', 'ground']]) scene.setLayer(layer, $(id).checked);
   $('place-focus').textContent = '보는 곳 · CBD';
   const a = snapshot.area; $('area-coords').textContent = `${a.west.toFixed(3)}–${a.east.toFixed(3)}°E · ${Math.abs(a.north).toFixed(3)}–${Math.abs(a.south).toFixed(3)}°S`;
@@ -406,10 +530,11 @@ async function load() {
   $('import-hint').textContent = `저장 완료 · ${new Date(snapshot.fetchedAt).toLocaleString('ko-KR', { timeZone: ZONE })}`; $('import').textContent = 'GIS 데이터 저장됨 ✓';
   $('parquet-files').replaceChildren(...snapshot.manifest.files.map(f => { const li = document.createElement('li'); li.textContent = `${f.name} · ${f.rows.toLocaleString()}행`; return li; }));
   const plan = await api('/api/gis/zetaris/plan'); $('sql-plan').textContent = plan.statements.map(sql => sql + ';').join('\n\n');
-  const memory = await api('/api/gis/memory'); if (memory) { $('date').value = memory.constraints.date; hour = memory.constraints.hour; $('hour').value = hour; $('memory-state').textContent = '같은 구역·자료 버전의 관찰 조건을 복원했습니다. 전체 H-MEM 엔진 통합 전입니다.'; }
+  const memory = await api('/api/gis/memory'); if (memory) { $('date').value = memory.constraints.date; hour = memory.constraints.hour; $('hour').value = hour; leaveLiveMode(); $('memory-state').textContent = '같은 구역·자료 버전의 관찰 조건을 복원했습니다. 전체 H-MEM 엔진 통합 전입니다.'; }
   sunDays.clear(); paintScenarios(); requestProfiles(); applySunPreview();
   await calculate();
   try { await loadCBD(); } catch { /* CBD optional until imported */ }
+  try { await initMicroclimate(); } catch (error) { $('micro-state').textContent = `기온 자료 오류 · ${error.message}`; }
 }
 async function importData() {
   let polling = false;
@@ -449,12 +574,16 @@ async function calculate() {
     ? `검증 완료 · ${run.date} ${hhmm(run.hour)} · 파란 점은 서버가 그늘로 판정한 20 m 표본, 옅은 파란 면은 화면 그림자 투영입니다.`
     : '해가 지평선 아래입니다. 그늘 영역이 꺼져 있습니다.');
 }
-$('hour').addEventListener('input', () => { pause(); setHour(Number($('hour').value)); });
+$('hour').addEventListener('input', () => { pause(); leaveLiveMode(); setHour(Number($('hour').value)); });
 $('hour').addEventListener('change', () => { if (cbd) loadObservations().catch(e => message(e.message, true)); });
 $('date').addEventListener('change', onDateChange);
+$('live-now').addEventListener('click', activateLiveMode);
+$('live-layer').addEventListener('change', paintLiveWeather);
 $('baseline').addEventListener('change', () => { requestProfiles(); paintComparison(); drawChart(); });
 $('import').addEventListener('click', () => work(importData));
 $('cbd-import').addEventListener('click', () => work(importCBD));
+$('micro-date').addEventListener('change', () => { shownMicroKey = null; loadMicroclimate().catch(e => message(e.message, true)); });
+$('micro-layer').addEventListener('change', () => { scene?.setLayer('temperatures', $('micro-layer').checked); $('micro-map-date').hidden = !$('micro-layer').checked || !microMetadata?.ready; });
 $('pick-start').addEventListener('click', () => { pickMode = 'start'; message('지도에서 출발점을 클릭하세요.'); });
 $('pick-end').addEventListener('click', () => { pickMode = 'end'; message('지도에서 도착점을 클릭하세요.'); });
 $('route').addEventListener('click', () => work(async () => {
@@ -476,7 +605,13 @@ $('explain').addEventListener('click', () => work(async () => { message('NVIDIA 
 for (const [id, layer] of [['buildings', 'buildings'], ['layer-shade', 'shade'], ['layer-cells', 'cells'], ['layer-ground', 'ground']]) $(id).addEventListener('change', () => { scene?.setLayer(layer, $(id).checked); if (layer === 'cells') scene?.setCellsStale(!isVerifiedNow()); });
 for (const [id, layer] of [['walk-layer', 'walk'], ['tree-layer', 'trees'], ['site-layer', 'sites']]) $(id).addEventListener('change', () => { scene?.setLayer(layer, $(id).checked); });
 $('perspective').addEventListener('click', () => scene?.reset()); $('top').addEventListener('click', () => scene?.reset(true)); $('reset').addEventListener('click', () => scene?.reset());
-buildScenarioControls(); paintScenarios(); applySunPreview();
+buildScenarioControls();
+const initialNow = sydneyNow(); $('date').value = initialNow.date; hour = initialNow.hour; $('hour').value = hour;
+paintScenarios(); applySunPreview();
+refreshLiveWeather();
+setInterval(() => { if (liveMode && !playing) { const now = sydneyNow(); if (dateValue() !== now.date || hour !== now.hour) { $('date').value = now.date; hour = now.hour; $('hour').value = hour; paintScenarios(); requestProfiles(); scheduleShade(); } } }, 60000);
+setInterval(refreshLiveWeather, 600000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLiveWeather(); });
 await work(async () => {
   status = await api('/api/status');
   if (!status.gis) { status = null; tone($('server-state'), 'crit', '이전 서버 · 재시작 필요'); throw new Error('이전 버전 서버가 실행 중입니다. 터미널에서 Ctrl+C 후 bash scripts/start_cool_sydney.sh로 다시 실행하세요.'); }
