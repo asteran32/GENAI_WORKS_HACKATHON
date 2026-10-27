@@ -19,14 +19,36 @@ The agent runs on **LangGraph**, queries supporting data through **Zetaris**, an
 
 | Interface | Address | Purpose |
 | --- | --- | --- |
-| Cool Sydney | http://127.0.0.1:8765/ | 3D map, fog comparisons and agent requests |
-| H-MEM local UI | http://127.0.0.1:8766/ | Memory list, condition creation and editing, search and history |
+| Mist user interface | http://127.0.0.1:4173/ | Chat requests and responses, JSON-driven Candidate locations and Fog units |
+| Unified backend and monitor | http://127.0.0.1:8766/ | Agent execution, memory storage and search, and run monitoring |
 | Agent Monitor | http://127.0.0.1:8766/agent-monitor | Per-run graph, timeline and input/output inspection |
 | Zetaris | http://localhost:3000/ | SQL interface for the separately installed data platform |
 
-`meterless-demo/` is an HTTP/UI adapter included in this repository for the H-MEM reference implementation. It is separate from the Meterless Nightshift web product and can be used without Chat Import. Agent Monitor reads the agent API on port 8765 through a local proxy.
+`meterless-demo/` is an HTTP/UI adapter included in this repository for the H-MEM reference implementation. It is separate from the Meterless Nightshift web product and can be used without Chat Import. The server on port 8766 runs the existing LangGraph agent directly. Agent Monitor and the chat interface on port 4173 share the same run records.
+
+Start the new Mist UI from the repository root with `npm --prefix assets start`. Stop any existing Python static server on port 4173 first. The Node server serves the same `assets/dist` interface and forwards chat requests to the existing agent API on port 8766. Run `npm --prefix meterless-demo start` in a separate terminal. This setup uses only ports 4173 and 8766; stop the legacy server on port 8765. The refresh icon in Ask Mist starts a new scenario, and completed allocation JSON populates Candidate locations on the left in descending order of allocated unit count.
+
+## Recorded run demo for teammates — no API keys required
+
+The repository includes 11 recorded LLM runs, 8 allocation JSON files and 11 related memories in `shared/demo/agent-monitor/`. These include 5 runs from an English scenario alongside existing Korean records. With Node.js 22 or later, you can run the demo without installing packages or downloading data.
+
+```bash
+node scripts/run_agent_monitor_demo.js
+```
+
+Open **http://127.0.0.1:8766/** and select Run history to inspect prompts, SQL results, LangGraph steps, allocation tables and JSON. This is a **read-only demo** of saved records. It requires no new LLM requests, Docker, Zetaris, H-MEM server or API keys. If port 8766 is in use, run `PORT=8767 node scripts/run_agent_monitor_demo.js`.
+
+To follow the English conversation, start with the run beginning **Across all pedestrian survey sites…** in Run history. The sequence is: find the top 10 sites → allocate 50 units with 3,000 L → prioritise commuting hours → reduce to 30 units → reduce the water budget to 1,500 L. The final result opens by default, and the number of memories retrieved across the runs is 0 → 1 → 2 → 3 → 4. Applying commuting-hour priority changed Site 102 from 5 to 6 units and Site 106 from 4 to 3 units. The calculated total passage count within operating hours was 336,210.
+
+- Numeric tables, totals and plan summaries are generated from saved calculation results. Original model responses are preserved in the run details.
+- The existing Korean records retain errors from before the fix. A run in which the commuting-hour request remained `false` has not been rewritten as a successfully updated plan. The included English runs use the corrected condition interpretation.
+- Regenerate the demo data from current completed runs with `node scripts/export_agent_monitor_demo.js`. The export does not copy `.env` or the original `.notebook/`, and removes API keys, authentication fields and personal local paths. Review the generated output before committing it.
+
+For new live requests and the map, follow the standard setup below.
 
 ## Getting started
+
+To try the English scenario from the beginning in Agent Monitor, restart the server on port 8766, refresh the page and select **Start new scenario**. Previous records are preserved, while memory retrieval is restricted to that scenario's Meterless memories. Leave **Remember conditions** enabled to save the current scenario's conditions. **Continue the selected run** is enabled automatically after the first request; send follow-up requests from the most recent completed run. Simply clearing the Continue checkbox still allows existing geographic memories to be retrieved. English questions receive results in English.
 
 Run the following commands from **the Git repository root containing this README**. In the `.publish` workspace described here, that location is `/Users/suyeongkim/cs/openAgent/.publish/GENAI_WORKS_HACKATHON`. The outer `openAgent/cool-sydney` directory contains older code, so check which directory you are running from.
 
@@ -66,14 +88,16 @@ The application server resolves settings in this order: shell environment variab
 bash scripts/run_dashboard.sh --date 2025-12-19
 ```
 
-The script checks the Python environment, collects and validates GIS data and CBD data for the selected date, then starts the web server. Once it is ready, open http://127.0.0.1:8765/. The first run takes time to download source data and generate Parquet files. Subsequent runs reuse cached data and validated bundles.
+The script checks the Python environment, collects and validates GIS data and CBD data for the selected date, then starts the web server. It also starts the legacy dashboard on port 8765, so stop it after data preparation. Start the current interface on port 4173 with `npm --prefix assets start`. The first run takes time to download source data and generate Parquet files. Subsequent runs reuse cached data and validated bundles.
 
 If no date is supplied, the default collection date is `2025-01-15`. `--map-only` skips CBD data preparation. The agent's analysis date is **fixed by the active catalogue**: changing only the date on the map does not change the date of the agent's supporting data.
 
 If the data is already prepared, start just the server with:
 
 ```bash
-node cool-sydney/server.js
+npm --prefix meterless-demo start
+# Run in a separate terminal
+npm --prefix assets start
 ```
 
 Street-level air-temperature observations are an optional dataset. Prepare the source CSV, then import it with `npm --prefix cool-sydney run import:microclimate`. See the [map and data guide](cool-sydney/README.md).
@@ -111,7 +135,7 @@ Once the engine is available in `meterless-demo/vendor/hmem`, start it in a sepa
 COOL_SYDNEY_PROJECT_ROOT="$PWD" npm --prefix meterless-demo start
 ```
 
-The environment variable tells Agent Monitor to read interface files from **the current repository**. The default proxy target is `http://127.0.0.1:8765`. The memory UI can be used without the Cool Sydney server.
+The environment variable tells Agent Monitor to read interface files from **the current repository**. The agent runs directly in this process on port 8766; no separate process on port 8765 is used.
 
 The H-MEM engine and its basic UI do not require a model API key. State is stored in `.notebook/` within the service directory. Memories from an older instance running in the outer `openAgent/meterless-demo` remain in that directory and are not transferred by cloning the Git repository.
 

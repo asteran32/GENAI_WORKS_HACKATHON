@@ -42,8 +42,10 @@
       <div class="panel-eyebrow"><svg><use href="#i-mist"/></svg><span data-i18n="lab">URBAN COOLING LAB</span></div>
       <div class="cooling-heading"><h1 data-i18n="placement">Cooling fog placement</h1><span class="sample-badge" data-i18n="illustrative">Illustrative model</span><button id="inspector-toggle" aria-expanded="false" aria-controls="inspector-details" data-i18n-label="expandDetails">⌃</button></div>
       <p class="panel-intro" data-i18n="intro">Explore heat, shade and pedestrian demand.</p>
-      <div class="candidate-heading"><span data-i18n="candidates">Candidate locations</span><span data-i18n="priority">Priority score / 100</span></div>
+      <div class="candidate-heading"><span data-i18n="candidates">Candidate locations</span><span data-i18n="fogUnits">Fog units</span></div>
+      <p id="allocation-summary" class="allocation-summary" role="status">Ask Mist for a placement plan to see locations and unit counts.</p>
       <div id="candidate-list" class="candidate-list" role="group" data-i18n-label="candidateGroup" aria-label="Cooling fog candidate locations"></div>
+      <section id="allocation-detail" class="allocation-detail" aria-label="Selected allocation"></section>
       <div id="inspector-details">
         <div class="site-details">
           <div class="selected-heading"><strong id="selected-site">Town Hall</strong><span id="site-state" data-i18n="installed">Installed</span></div>
@@ -84,7 +86,7 @@
       <div class="chat-heading"><h2 id="chat-title" data-i18n="chatTitle">Mist assistant</h2><p data-i18n="chatSubtitle">Cooling fog &amp; city scenarios</p></div>
       <div class="chat-header-actions"><button id="chat-clear" class="chat-icon-button" disabled data-i18n-label="chatClear" data-i18n-title="chatClear" aria-label="Clear messages"><svg aria-hidden="true"><use href="#i-reset"/></svg></button><button id="chat-close" class="chat-icon-button" data-i18n-label="chatClose" data-i18n-title="chatClose" aria-label="Close chat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
     </header>
-    <div class="chat-mode"><span class="chat-mode-dot" aria-hidden="true"></span><span data-i18n="chatPreview">UI preview</span></div>
+    <div class="chat-mode"><span class="chat-mode-dot" aria-hidden="true"></span><span id="chat-mode-label" data-i18n="chatPreview">Planning assistant</span></div>
     <div id="chat-scroll" class="chat-scroll">
       <section id="chat-welcome" class="chat-welcome">
         <span class="chat-welcome-mark" aria-hidden="true"><svg><use href="#i-mist"/></svg></span>
@@ -94,14 +96,14 @@
       <div id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-relevant="additions" data-i18n-label="chatLog" aria-label="Conversation"></div>
     </div>
     <footer class="chat-footer">
-      <p id="chat-note" class="chat-note" data-i18n="chatNote">Messages stay in this tab. Agent replies are not connected in this UI preview.</p>
+      <p id="chat-note" class="chat-note" data-i18n="chatNote">Plans use the registered analysis date. Conditions are saved for this conversation.</p>
       <form id="chat-form" class="chat-form">
         <label class="chat-sr-only" for="chat-input" data-i18n="chatMessage">Your message</label>
-        <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…" data-i18n-placeholder="chatPlaceholder" aria-describedby="chat-keyboard chat-note"></textarea>
+        <textarea id="chat-input" rows="2" maxlength="3000" placeholder="Type a message…" data-i18n-placeholder="chatPlaceholder" aria-describedby="chat-keyboard chat-note"></textarea>
         <button id="chat-send" type="submit" disabled data-i18n-label="chatSend" data-i18n-title="chatSend" aria-label="Send message"><svg aria-hidden="true"><use href="#i-send"/></svg></button>
       </form>
       <p id="chat-keyboard" class="chat-keyboard" data-i18n="chatKeyboard">Enter to send · Shift + Enter for a new line</p>
-      <p id="chat-status" class="chat-sr-only" role="status"></p>
+      <p id="chat-status" class="chat-status" role="status"></p><button id="chat-resume" type="button" hidden>Check response</button>
     </footer>
   </dialog>
   <script type="module" src="./chat.js"></script>

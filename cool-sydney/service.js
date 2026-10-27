@@ -74,6 +74,9 @@ function createService({ directory, env = process.env, transport = fetch, weathe
         if (method === 'GET' && route === '/api/agent/graph') return await agent.graph();
         if (method === 'GET' && route === '/api/agent/catalog') return agent.catalog();
         if (method === 'GET' && route === '/api/agent/memories') return await agent.memories();
+        if (method === 'GET' && route === '/api/agent/plans/latest') return {plan:agent.latestPlan()};
+        const planMatch=route.match(/^\/api\/agent\/runs\/([a-f0-9-]{36})\/plan$/);
+        if(method==='GET'&&planMatch){const plan=agent.plan(planMatch[1]);if(!plan)throw new ApiError(404,'No exported plan for this run.');return plan;}
         if (method === 'GET' && route === '/api/agent/runs') return agent.list();
         if (method === 'POST' && route === '/api/agent/runs') return await agent.start(body);
         const match = route.match(/^\/api\/agent\/runs\/([a-f0-9-]{36})(\/memory)?$/);

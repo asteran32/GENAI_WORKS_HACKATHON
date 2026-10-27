@@ -1,4 +1,5 @@
 import * as T from '/vendor/scene-vendor.mjs';
+import { planMarkers } from './agent-plan-view.mjs';
 import { mistField, mistHeatRgb } from './mist-model.mjs';
 const R = 6371008.8, RAD = Math.PI / 180;
 const polys = g => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
@@ -261,6 +262,8 @@ export class CityScene {
     this.scene.add(this.grid);
     this.buildings = new T.Group(); this.ground = new T.Group(); this.edges = new T.Group(); this.shades = new T.Group(); this.cells = new T.Group(); this.highlight = new T.Group();
     this.walk = new T.Group(); this.trees = new T.Group(); this.sites = new T.Group(); this.temperatures = new T.Group(); this.routes = new T.Group();
+    this.agentPlanGroup=new T.Group();this.scene.add(this.agentPlanGroup);this.agentPlanLabels=[];
+    this.agentPlanLabelsRoot=document.createElement('div');this.agentPlanLabelsRoot.className='mist-labels';element.append(this.agentPlanLabelsRoot);
     this.mist = new T.Group(); this.scene.add(this.mist); this.mistEnabled = false;
     this.fogActors = []; this.fogPreview = new T.Group(); this.fogPreview.visible = false; this.scene.add(this.fogPreview);
     this.weather = new T.Group(); this.weatherData = null; this.weatherEnabled = false; this.weatherClouds = []; this.weatherRain = null; this.weatherRainBase = null; this.weatherWind = null;
@@ -506,8 +509,24 @@ export class CityScene {
     }
     return best;
   }
+  setAgentPlan(plan,date,hour){
+    const key=JSON.stringify([plan?.plan_id,date,Math.floor(hour)]);if(key===this._agentPlanKey)return;
+    if(!this.area)return;this._agentPlanKey=key;this.clear(this.agentPlanGroup);this.agentPlanLabelsRoot.replaceChildren();this.agentPlanLabels=[];
+    for(const site of planMarkers(plan,date,hour)){
+      const [x,y]=this.project([site.longitude,site.latitude]);
+      const ring=new T.Mesh(new T.RingGeometry(6,9,32),new T.MeshBasicMaterial({color:site.active?'#0284c7':'#64748b',side:T.DoubleSide,depthWrite:false,depthTest:false}));
+      ring.rotation.x=-Math.PI/2;ring.position.set(x,3,-y);ring.renderOrder=20;this.agentPlanGroup.add(ring);
+      const el=document.createElement('div');el.className='mist-label agent-plan-label';el.dataset.active=String(site.active);
+      const title=document.createElement('strong'),detail=document.createElement('span');title.textContent=site.title;detail.textContent=site.detail;el.append(title,detail);el.title=[site.location,site.description,'Survey reference only; exact installation layout required.'].join(' · ');
+      this.agentPlanLabelsRoot.append(el);this.agentPlanLabels.push({el,world:new T.Vector3(x,18,-y)});
+    }
+  }
   updatePlaceLabels() {
     const w = this.element.clientWidth, h = this.element.clientHeight;
+    for(const label of this.agentPlanLabels||[]){
+      this._ndc.copy(label.world).project(this.camera);const visible=this._ndc.z>-1&&this._ndc.z<1&&Math.abs(this._ndc.x)<.96&&Math.abs(this._ndc.y)<.92;label.el.hidden=!visible;
+      if(visible)label.el.style.transform=`translate(${(this._ndc.x*.5+.5)*w}px,${(-this._ndc.y*.5+.5)*h}px) translate(-50%,-150%)`;
+    }
     for (const label of this.mistLabels || []) {
       this._ndc.copy(label.world).project(this.camera);
       const visible = this.mistEnabled && this._ndc.z > -1 && this._ndc.z < 1 && Math.abs(this._ndc.x) < .95 && Math.abs(this._ndc.y) < .9;

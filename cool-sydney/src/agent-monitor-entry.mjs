@@ -4,7 +4,7 @@ const graphView=createGraphView({svg:$('agent-graph'),detail:$('agent-graph-deta
 let graphStructure=initialGraph,graphRun=null;
 graphView.paint(graphStructure,null);
 $('agent-graph-status').textContent='Compiled graph from the app bundle. Checking the live server.';
-let runId=null, date='2025-12-19', polling=false;
+let runId=null, date='2025-12-19', polling=false,replayMode=false,freshStart=false,freshSupported=false;
 const stateLabel={queued:'Pending',running:'Running',completed:'Complete',failed:'Failed'};
 const memoryVersions=new Map();
 let paintedVersion='';
@@ -70,17 +70,22 @@ async function api(url,body) {
   const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);return result;
 }
 async function refresh() {
-  const s=await api('/api/agent/status');date=s.date||date;$('agent-date').textContent=date;
+  const s=await api('/api/agent/status');replayMode=s.replay_mode===true;freshSupported=s.fresh_start_supported===true;date=s.date||date;$('agent-date').textContent=date;
+  $('agent-new-scenario').disabled=polling||replayMode||!freshSupported;
+  $('agent-new-scenario').title=!freshSupported?'Restart the server on port 8766 to enable separate scenario memories.':'';
   const selected=s.providers?.[$('agent-provider').value];
-  $('agent-trace-notice').hidden=s.trace_version>=4;
-  $('agent-trace-notice').textContent=s.trace_version>=4?'':'The server on port 8765 is outdated. Restart it to enable conversation context and survey-site allocation.';
+  $('agent-trace-notice').hidden=replayMode||s.trace_version>=6;
+  $('agent-trace-notice').textContent=replayMode||s.trace_version>=6?'':'Restart the server on port 8766 to enable new scenarios with separate memories and English conditions.';
   const blockers=[];
+  if(replayMode){blockers.push(`Recorded demo · ${s.snapshot?.runs?.length||0} runs · read-only. Select a run to inspect its prompts, SQL and results.`);$('agent-follow-latest').checked=false;$('agent-run').textContent='Recorded demo';$('agent-show-date').disabled=true;}
+  if(!replayMode){
   if(polling)blockers.push('The previous request is still running.');
-  if(!s.conversation_supported)blockers.push('Restart the server on port 8765 to enable follow-up conversations.');
+  if(!s.conversation_supported)blockers.push('Restart the server on port 8766 to enable follow-up conversations.');
   if(!s.dependency_installed)blockers.push('LangGraph is not installed.');
-  if(!selected?.configured)blockers.push(`${$('agent-provider').value==='gemini'?'Gemini':'NVIDIA'} API key is not loaded. Configure .env and restart the server on port 8765.`);
+  if(!selected?.configured)blockers.push(`${$('agent-provider').value==='gemini'?'Gemini':'NVIDIA'} API key is not loaded. Configure .env and restart the server on port 8766.`);
   if(!s.catalog_ready)blockers.push(`Could not read data catalog: ${s.catalog_error}`);
-  $('agent-status').textContent=blockers.length?'Cannot send: '+blockers.join(' '):'Ready · Enter a question and click Send.';
+  }
+  $('agent-status').textContent=replayMode?blockers[0]:blockers.length?'Cannot send: '+blockers.join(' '):'Ready · Enter a question and click Send.';
   $('agent-run').disabled=true;$('agent-run').title=blockers.join(' ');
   if(s.catalog_ready)$('agent-catalog').textContent=JSON.stringify(await api('/api/agent/catalog'),null,2);
   try{graphStructure=await api('/api/agent/graph');graphView.paint(graphRun?.graph||graphStructure,graphRun);}
@@ -99,37 +104,32 @@ function paint(run) {
   $('agent-conditions').textContent=c?`Inventory ${c.devices??'Not set'} units · Commute priority ${c.commute_priority?'On':'Off'} · Water budget ${c.water_budget_l??'Not set'} L`:'';
   $('agent-allocation').replaceChildren();
   if(run.allocation)paintAllocation(run.allocation);
-  $('agent-answer').textContent=run.answer||run.error||'Retrieving evidence…';
+  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation,run.response_language):run.answer||run.error||'Retrieving evidence…';
   $('agent-trace').replaceChildren(...run.events.map(event=>{
     const li=document.createElement('li'),details=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');
     summary.textContent=`${event.seq}. ${event.type}${event.name?' · '+event.name:''} · ${event.at.slice(11,19)}`;
     pre.textContent=JSON.stringify(event,null,2);details.append(summary,pre);li.append(details);return li;
   }));
-  $('agent-remember').disabled=run.status!=='completed';
+  $('agent-remember').disabled=replayMode||run.status!=='completed';
 }
 function paintContinuation(){
+  if(freshStart){$('agent-context-note').textContent='New scenario ready. Earlier conversations and memories will not be used. Remember conditions saves memories for this scenario.';return;}
   const previous=$('agent-continue').checked&&graphRun?.status==='completed'?graphRun:null;
-  $('agent-context-note').textContent=previous?`Continuing: ${previous.question.slice(0,130)} · ${previous.candidates?.site_ids?.length||0} selected sites. Conditions and the last plan carry forward.`:'New conversation. Saved operating preferences may still be recalled from Meterless.';
+  $('agent-context-note').textContent=previous?`Continuing: ${previous.question.slice(0,130)} · ${previous.candidates?.site_ids?.length||0} selected sites. Conditions and the last plan carry forward.${previous.memory_scope==='conversation'?' Only this scenario’s Meterless memories are recalled.':''}`:'New conversation. Saved operating preferences may still be recalled from Meterless. Use Start new scenario to keep them separate.';
 }
-$('agent-continue').addEventListener('change',paintContinuation);
-function paintAllocation(plan){
-  const target=$('agent-allocation'),wrap=document.createElement('div');wrap.className='trace-table';
-  const summary=document.createElement('p');summary.textContent=`${plan.total_devices} units · ${plan.total_water_l.toFixed(1)} L planned / ${plan.constraints.water_budget_l??'unlimited'} L budget · ${plan.operating_hours.start_hour}:00–${plan.operating_hours.end_hour}:00 · ${plan.survey_period||'Forecast proxies'}`;
-  const table=document.createElement('table'),head=document.createElement('tr');
-  for(const text of ['Site','Street / segment','Units','Change']){const th=document.createElement('th');th.textContent=text;head.append(th);}table.append(head);
-  for(const row of plan.allocation){const tr=document.createElement('tr');for(const text of [row.site_id??row.id,[row.name,row.description].filter(Boolean).join(' · '),row.devices,row.change==null?'—':`${row.change>=0?'+':''}${row.change}`]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}table.append(tr);}
-  wrap.append(table);target.append(summary,wrap);
-  const schedule=document.createElement('details'),title=document.createElement('summary'),list=document.createElement('ul');title.textContent='Hourly spray schedule';
-  for(const hour of plan.schedule){const li=document.createElement('li');li.textContent=`${String(hour.hour).padStart(2,'0')}:00 · ${hour.active_minutes} active min · ${hour.water_l.toFixed(1)} L`;list.append(li);}schedule.append(title,list);target.append(schedule);
-  const note=document.createElement('p');note.className='hint';note.textContent='Survey-based demand allocation, not measured cooling or verified installation positions. Water assumes 12 L per unit-hour. All units share the hourly spray duration.';target.append(note);
-}
+$('agent-continue').addEventListener('change',()=>{if($('agent-continue').checked)freshStart=false;paintContinuation();});
+$('agent-new-scenario').addEventListener('click',()=>{
+  if(polling||replayMode||!freshSupported)return;
+  freshStart=true;$('agent-continue').checked=false;$('agent-follow-latest').checked=false;$('agent-remember-request').checked=true;$('agent-devices').value='';paintContinuation();
+});
+function paintAllocation(plan){renderCalculatedPlan($('agent-allocation'),plan);}
 $('agent-run').addEventListener('click',async()=>{
   if(!$('agent-question').value.trim()){$('agent-status').textContent='Enter a question.';$('agent-question').focus();return;}
-  if(polling)return;
+  if(polling||replayMode)return;
   $('agent-follow-latest').checked=true;
-  polling=true;$('agent-history').disabled=true;$('agent-run').disabled=true;$('agent-remember').disabled=true;$('agent-answer').textContent='Starting run…';$('agent-trace').replaceChildren();paintWorkflow(null);
+  polling=true;$('agent-new-scenario').disabled=true;$('agent-history').disabled=true;$('agent-run').disabled=true;$('agent-remember').disabled=true;$('agent-answer').textContent='Starting run…';$('agent-trace').replaceChildren();paintWorkflow(null);
   try {
-    const started=await api('/api/agent/runs',{question:$('agent-question').value,date,provider:$('agent-provider').value,devices:$('agent-devices').value.trim()===''?null:Number($('agent-devices').value),remember_request:$('agent-remember-request').checked,previous_run_id:$('agent-continue').checked&&graphRun?.status==='completed'?graphRun.id:null});runId=started.id;$('agent-devices').value='';
+    const started=await api('/api/agent/runs',{question:$('agent-question').value,date,provider:$('agent-provider').value,devices:$('agent-devices').value.trim()===''?null:Number($('agent-devices').value),remember_request:$('agent-remember-request').checked,previous_run_id:!freshStart&&$('agent-continue').checked&&graphRun?.status==='completed'?graphRun.id:null,fresh_start:freshStart});runId=started.id;$('agent-devices').value='';freshStart=false;$('agent-continue').checked=true;
     for(let i=0;i<65;i++) {
       const run=await api(`/api/agent/runs/${runId}`);paint(run);
       if(!['queued','running'].includes(run.status))break;
@@ -148,7 +148,7 @@ $('agent-provider').addEventListener('change',()=>refresh().catch(error=>{$('age
 $('agent-question').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!$('agent-run').disabled)$('agent-run').click();}});
 $('agent-refresh').addEventListener('click',()=>{monitorFailures=0;refresh().then(()=>scheduleMonitor(0)).catch(error=>{$('agent-status').textContent=error.message;});});
 $('agent-remember').addEventListener('click',async()=>{
-  if(!runId)return;
+  if(!runId||replayMode)return;
   $('agent-remember').disabled=true;
   try {const result=await api(`/api/agent/runs/${runId}/memory`,{text:$('agent-memory').value});paint(await api(`/api/agent/runs/${runId}`));await refreshMemories();$('agent-status').textContent=`Meterless ${result.memory_id} saved. Available to future requests.`;}
   catch(error){$('agent-status').textContent=error.message;}
@@ -157,7 +157,7 @@ $('agent-remember').addEventListener('click',async()=>{
 paintWorkflow(null);
 refresh().then(()=>scheduleMonitor(0)).catch(error=>{$('agent-status').textContent=`${error.message} Restart the server and click Refresh.`;$('agent-graph-status').textContent='Showing the bundled graph. Live server connection unavailable.';});
 
-$('agent-show-date').addEventListener('click',()=>window.open('http://127.0.0.1:8765/','_blank','noopener'));
+$('agent-show-date').addEventListener('click',()=>window.open('http://127.0.0.1:4173/','_blank','noopener'));
 let monitorBusy=false,monitorTimer=null,monitorFailures=0;
 function scheduleMonitor(delay){clearTimeout(monitorTimer);monitorTimer=setTimeout(monitorTick,delay);}
 async function monitorTick(){

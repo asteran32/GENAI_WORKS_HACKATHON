@@ -11,13 +11,15 @@ cd assets
 npm start
 ```
 
-Open **http://127.0.0.1:4173**. Alternatively, from the repository root:
+Open **http://127.0.0.1:4173**. The Node server serves `dist/` and forwards only the agent status/run/plan routes to the existing backend at `127.0.0.1:8766`. No frontend dependencies or API keys are needed. Node.js 22+ is required.
+
+Start the combined agent, memory and monitoring backend in a separate terminal from the repository root:
 
 ```sh
-python3 -m http.server 4173 --bind 127.0.0.1 --directory assets/dist
+npm --prefix meterless-demo start
 ```
 
-No npm installation, API key or backend is required. Node.js 22+ runs checks; Python 3 serves the app. `dist/` contains the maintained source and ready-to-serve distribution; the build command checks it without generating another bundle.
+Only ports **4173 and 8766** are required. Stop the old 8765 process. The 8766 server calls the existing LangGraph agent directly and uses its own H-MEM routes in process. Keep Zetaris running for live SQL planning. Gemini credentials stay in the backend environment. If port 4173 is still served by `python3 -m http.server`, stop that process and run `npm --prefix assets start` from the repository root; the Python static server cannot forward chat requests. `dist/` contains maintained source, and the build command validates it without generating another bundle.
 
 ```sh
 cd assets
@@ -91,7 +93,7 @@ Water use, costs, mains connections, permits, device specifications, measured pe
 | `dist/pedestrians.js` | Instanced walkers with synchronised body, arm and leg movement |
 | `dist/pedestrian-motion.js` | Validated street segments, metric walking speeds, smooth turns and continuous travel |
 | `dist/simulation.js` | Illustrative thermal, output, radius, footfall and ranking functions |
-| `dist/chat.js`, `chat.css` | Header chat icon, responsive conversation panel and local message UI preview |
+| `dist/chat.js`, `chat.css` | Header chat icon, responsive conversation panel and backend chat, scenario context and saved responses |
 | `dist/camera.js` | Interruptible eased camera transitions with reduced-motion support |
 | `dist/app.js` | State, scene integration, fog, heat, labels, picking and UI events |
 | `qa/browser-qa.mjs` | Real Chrome interactions, loading failures, responsive layout and screenshots |
@@ -104,10 +106,16 @@ The private visual-reference URL was unavailable during implementation; the supp
 
 Walking-motion verification: `node test-pedestrians.mjs` covers route safety, turns, loops and whole-body instance movement. With the server running, `node qa/walking-qa.mjs` checks actual travel, layer pause/resume, crowd changes, mobile and reduced motion in Chrome. It also uses ffmpeg to generate [walking.gif](qa/walking.gif); override `FFMPEG_PATH` if needed. The latest targeted results are in [qa/walking-results.json](qa/walking-results.json). These are illustrative short back-and-forth walks on mapped segments, not destination or crowd-avoidance modelling.
 
-## Chat interface preview
+## Connected planning chat
 
-Select the chat icon / **Ask Mist** in the upper-right header to open the conversation panel. Type a message and press Enter or the send arrow; Shift+Enter inserts a new line. Starter questions fill the composer. Close/Escape returns focus to the icon; reopening retains messages and the unsent draft. Clear messages resets the conversation. The panel adapts to narrow and short mobile viewports and respects reduced motion.
+Select **Ask Mist** to send questions through the existing LangGraph agent. The backend still performs its catalog lookup, Zetaris SQL, Meterless recall/save, allocation and validated JSON export. The registered backend analysis date is used; the sample map date is not sent as a replacement.
 
-This is **UI only**: messages are held in page memory, no agent/API requests are made, and no assistant replies are generated. Reloading the page clears the preview. The panel explicitly identifies the disconnected agent. Gemini integration is outside this UI-only change.
+- The first question starts a fresh scenario (`fresh_start: true`). Follow-ups send the last completed `previous_run_id`, and conditions are remembered within that conversation.
+- The refresh icon is labelled **Start new scenario**. It clears this tab's conversation and displayed plan, then starts the next request without earlier conditions. Existing execution logs and Meterless memories remain stored. It is disabled while a request is pending.
+- Responses and the pending run ID survive page reload in session storage. Resuming a response polls its ID; it does not resubmit the question. Polling is bounded and **Check response** reconnects after an interruption.
+- Only a completed response with a validated `cool-sydney.fog-plan.v1` plan updates **Candidate locations**. The right column is **Fog units**, sorted by unit count descending. A failed request keeps the previous valid plan.
+- Each segment shows its name, site ID and unit count. Selecting it shows its schedule, water use and reference coordinates, and focuses the map when coordinates exist. Missing coordinates are labelled rather than invented.
+- Map markers represent survey reference locations and unit counts, not exact individual installations. The earlier illustrative installed fog is turned off while an agent plan is displayed; quantities are not multiplied into the sample cooling model.
+- The 8766 monitoring page shows these same backend runs and their complete prompts, SQL, memory use and JSON. Internal execution traces are not shown in the user chat.
 
-With the local server running, `node qa/chat-qa.mjs` runs the focused Chrome UI checks. See [chat-results.json](qa/chat-results.json), [desktop](qa/chat-welcome-desktop.png) and [mobile](qa/chat-mobile-390.png) evidence.
+`npm test` checks the proxy and replays the five recorded English responses through the chat client and candidate panel without making paid model calls. Optional `node qa/chat-qa.mjs` uses Playwright and recorded API fixtures to check the connected UI and responsive layout. It writes `qa/connected-chat-results.json` and `qa/connected-chat-*.png` when actually run. Earlier `chat-*.png` and `chat-results.json` document the former UI preview, not the connected implementation.

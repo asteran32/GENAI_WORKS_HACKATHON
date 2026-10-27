@@ -1,0 +1,160 @@
+{
+  "source": "compiled-langgraph",
+  "schema_version": 3,
+  "nodes": [
+    {
+      "id": "__start__"
+    },
+    {
+      "id": "load_catalog"
+    },
+    {
+      "id": "recall_memory"
+    },
+    {
+      "id": "compose_prompt"
+    },
+    {
+      "id": "model"
+    },
+    {
+      "id": "route_tools"
+    },
+    {
+      "id": "execute_sql"
+    },
+    {
+      "id": "query_forecast"
+    },
+    {
+      "id": "allocate_devices"
+    },
+    {
+      "id": "simulate_cooling"
+    },
+    {
+      "id": "inspect_catalog"
+    },
+    {
+      "id": "reject_tool"
+    },
+    {
+      "id": "finish"
+    },
+    {
+      "id": "export_plan"
+    },
+    {
+      "id": "__end__"
+    }
+  ],
+  "edges": [
+    {
+      "source": "__start__",
+      "target": "load_catalog",
+      "conditional": false
+    },
+    {
+      "source": "allocate_devices",
+      "target": "route_tools",
+      "conditional": false
+    },
+    {
+      "source": "compose_prompt",
+      "target": "model",
+      "conditional": false
+    },
+    {
+      "source": "execute_sql",
+      "target": "route_tools",
+      "conditional": false
+    },
+    {
+      "source": "export_plan",
+      "target": "__end__",
+      "conditional": false
+    },
+    {
+      "source": "finish",
+      "target": "export_plan",
+      "conditional": false
+    },
+    {
+      "source": "inspect_catalog",
+      "target": "route_tools",
+      "conditional": false
+    },
+    {
+      "source": "load_catalog",
+      "target": "recall_memory",
+      "conditional": false
+    },
+    {
+      "source": "query_forecast",
+      "target": "route_tools",
+      "conditional": false
+    },
+    {
+      "source": "recall_memory",
+      "target": "compose_prompt",
+      "conditional": false
+    },
+    {
+      "source": "reject_tool",
+      "target": "route_tools",
+      "conditional": false
+    },
+    {
+      "source": "simulate_cooling",
+      "target": "route_tools",
+      "conditional": false
+    },
+    {
+      "source": "model",
+      "target": "route_tools",
+      "conditional": true
+    },
+    {
+      "source": "model",
+      "target": "finish",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "execute_sql",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "query_forecast",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "allocate_devices",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "simulate_cooling",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "inspect_catalog",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "reject_tool",
+      "conditional": true
+    },
+    {
+      "source": "route_tools",
+      "target": "model",
+      "conditional": true
+    }
+  ],
+  "mermaid": "%%{init: {'flowchart': {'curve': 'linear'}}}%%\ngraph TD;\n\t__start__([<p>__start__</p>]):::first\n\tload_catalog(load_catalog)\n\trecall_memory(recall_memory)\n\tcompose_prompt(compose_prompt)\n\tmodel(model)\n\troute_tools(route_tools)\n\texecute_sql(execute_sql)\n\tquery_forecast(query_forecast)\n\tallocate_devices(allocate_devices)\n\tsimulate_cooling(simulate_cooling)\n\tinspect_catalog(inspect_catalog)\n\treject_tool(reject_tool)\n\tfinish(finish)\n\texport_plan(export_plan)\n\t__end__([<p>__end__</p>]):::last\n\t__start__ --> load_catalog;\n\tallocate_devices --> route_tools;\n\tcompose_prompt --> model;\n\texecute_sql --> route_tools;\n\texport_plan --> __end__;\n\tfinish --> export_plan;\n\tinspect_catalog --> route_tools;\n\tload_catalog --> recall_memory;\n\tquery_forecast --> route_tools;\n\trecall_memory --> compose_prompt;\n\treject_tool --> route_tools;\n\tsimulate_cooling --> route_tools;\n\tmodel -.-> route_tools;\n\tmodel -.-> finish;\n\troute_tools -.-> execute_sql;\n\troute_tools -.-> query_forecast;\n\troute_tools -.-> allocate_devices;\n\troute_tools -.-> simulate_cooling;\n\troute_tools -.-> inspect_catalog;\n\troute_tools -.-> reject_tool;\n\troute_tools -.-> model;\n\tclassDef default fill:#f2f0ff,line-height:1.2;\n\tclassDef first fill-opacity:0;\n\tclassDef last fill:#bfb6fc;\n",
+  "post_graph": "Meterless memory persistence runs after graph completion when enabled."
+}

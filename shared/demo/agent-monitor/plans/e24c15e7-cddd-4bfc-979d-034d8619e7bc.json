@@ -1,0 +1,639 @@
+{
+  "schema_version": "cool-sydney.fog-plan.v1",
+  "plan_id": "e24c15e7-cddd-4bfc-979d-034d8619e7bc",
+  "run_id": "e24c15e7-cddd-4bfc-979d-034d8619e7bc",
+  "conversation_id": "ddd2fde2-6722-4df3-a3d6-a45bf4472c5e",
+  "analysis_date": "2025-12-19",
+  "time_zone": "Australia/Sydney",
+  "created_at": "2026-10-27T14:50:07.659Z",
+  "status": "proposal",
+  "equipment_model": "FEC-MP003",
+  "operating_window": {
+    "start_hour": 10,
+    "end_hour": 18
+  },
+  "constraints": {
+    "devices": 30,
+    "commute_priority": false,
+    "water_budget_l": 1500,
+    "start_hour": 10,
+    "end_hour": 18
+  },
+  "assumptions": {
+    "water_l_per_device_hour": 12,
+    "commute_weight": 1,
+    "commute_hours": [
+      8,
+      9,
+      17,
+      18
+    ],
+    "schedule": "All allocated units share the hourly spray duration; highest weighted-demand hours receive water first."
+  },
+  "source": {
+    "database": "cool_sydney_737ff8f3c1d52d2a",
+    "catalog_version": "ca56d01baff262ca",
+    "survey_period": "2025 - Weekday - October",
+    "evidence_type": "survey-based-allocation-scenario",
+    "demand_sql_event": 22,
+    "position_sql_event": 38,
+    "position_status": "queried"
+  },
+  "totals": {
+    "units": 30,
+    "water_l": 1500,
+    "full_time_water_l": 2880
+  },
+  "allocations": [
+    {
+      "allocation_id": "survey-50",
+      "site_id": 50,
+      "location": "Park Street",
+      "description": "Between George Street and Pitt Street",
+      "units": 4,
+      "change": 0,
+      "position": {
+        "longitude": 151.2075462034291,
+        "latitude": -33.873077411822486,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 8
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 48
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-105",
+      "site_id": 105,
+      "location": "George Street",
+      "description": "Intersection of George Street and Liverpool Street",
+      "units": 4,
+      "change": 0,
+      "position": {
+        "longitude": 151.20617841198816,
+        "latitude": -33.876390751778395,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 8
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 48
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-107",
+      "site_id": 107,
+      "location": "Martin Place",
+      "description": "Between Castlereagh Street and Pitt Street",
+      "units": 3,
+      "change": 0,
+      "position": {
+        "longitude": 151.20918049431324,
+        "latitude": -33.86766104676768,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 6
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 36
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-102",
+      "site_id": 102,
+      "location": "George Street",
+      "description": "Between Market Street and Park Street",
+      "units": 3,
+      "change": 0,
+      "position": {
+        "longitude": 151.20698867134897,
+        "latitude": -33.871740489035886,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 6
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 36
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-43",
+      "site_id": 43,
+      "location": "George Street",
+      "description": "Between Park Street and Bathurst Street",
+      "units": 4,
+      "change": 0,
+      "position": {
+        "longitude": 151.20690379203083,
+        "latitude": -33.87374754250427,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 8
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 48
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 48
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-106",
+      "site_id": 106,
+      "location": "Martin Place",
+      "description": "Between Pitt Street and George Street",
+      "units": 2,
+      "change": 0,
+      "position": {
+        "longitude": 151.2077647006341,
+        "latitude": -33.867525939182705,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 4
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 24
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-235",
+      "site_id": 235,
+      "location": "Market Street",
+      "description": "Between Clarence St and York St",
+      "units": 3,
+      "change": 0,
+      "position": null,
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 6
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 36
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-39",
+      "site_id": 39,
+      "location": "Park Street",
+      "description": "Between Pitt St and Castlereagh St",
+      "units": 2,
+      "change": 0,
+      "position": {
+        "longitude": 151.2086375477296,
+        "latitude": -33.87318481818484,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 4
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 24
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-38",
+      "site_id": 38,
+      "location": "George Street",
+      "description": "Between King Street and Market Street",
+      "units": 3,
+      "change": 0,
+      "position": {
+        "longitude": 151.20694968769868,
+        "latitude": -33.869686131279664,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 6
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 36
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 36
+        }
+      ]
+    },
+    {
+      "allocation_id": "survey-36",
+      "site_id": 36,
+      "location": "George Street",
+      "description": "Between Martin Place and Hunter Street",
+      "units": 2,
+      "change": 0,
+      "position": {
+        "longitude": 151.20722296068794,
+        "latitude": -33.86616105997881,
+        "crs": "EPSG:4326",
+        "kind": "survey-site-reference",
+        "installation_verified": false
+      },
+      "placement_status": "requires-site-layout",
+      "schedule": [
+        {
+          "hour_local": 10,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 11,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 12,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 13,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 14,
+          "active_minutes": 10,
+          "water_l": 4
+        },
+        {
+          "hour_local": 15,
+          "active_minutes": 0,
+          "water_l": 0
+        },
+        {
+          "hour_local": 16,
+          "active_minutes": 60,
+          "water_l": 24
+        },
+        {
+          "hour_local": 17,
+          "active_minutes": 60,
+          "water_l": 24
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Survey-day passages, not observed or forecast demand on the analysis date.",
+    "Segment-level allocation; installation coordinates, pedestrian clearance and site capacity are unverified.",
+    "Demand-proportional scenario, not global optimization or measured cooling.",
+    "Water access, power, overlapping devices, weather and shade are not modeled.",
+    "12 L per unit-hour is an assumption. Active minutes are total spraying time within each hour, not a device control command.",
+    "Commute priority doubles demand weights only within the unchanged operating window.",
+    "Map positions are survey reference markers. Exact device installation coordinates have not been chosen."
+  ],
+  "execution": {
+    "controls_physical_devices": false,
+    "apply_as": "segment-allocation-markers"
+  },
+  "unmapped_site_ids": [
+    235
+  ]
+}

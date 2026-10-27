@@ -27,7 +27,7 @@ try {
   await page.goto('http://127.0.0.1:4173');await ready(page);
   let s;
   if(process.argv.includes('--people')){
-    await page.locator('#candidate-townhall').click();await settled(page);
+    await page.locator('#map-focus-townhall').click();await settled(page);
     for(let i=0;i<4;i++)await page.locator('#zoom-in').click();
     await page.mouse.move(1100,600);
     for(let i=0;i<32;i++){await page.mouse.wheel(0,-100);await page.waitForTimeout(40);}
@@ -47,7 +47,7 @@ try {
   const schema=await page.evaluate(async()=>{const m=await(await fetch('https://tiles.openfreemap.org/planet')).json();return{tiles:m.tiles,version:m.version,layers:m.vector_layers.filter(l=>['building','transportation','water','park','landcover'].includes(l.id))};});
   await fs.writeFile(new URL('map-schema.json',output),JSON.stringify(schema,null,2)+'\n');
   for(const id of ['quay','martin','townhall']){
-    await page.locator('#candidate-'+id).click();await settled(page);const s=await state(page);
+    await page.locator('#map-focus-'+id).click();await settled(page);const s=await state(page);
     check(id+' list selection zooms and keeps the selected map marker',s.selected===id&&s.focusedPlace===id&&s.camera.zoom>1.5&&await page.locator('#map-focus-'+id).getAttribute('aria-pressed')==='true');
     const p=s.screenPoints.find(p=>p.id===id);const inspector=await page.locator('.cooling-panel').boundingBox();
     check(id+' focus is visible beside the inspector',p.x>inspector.x+inspector.width&&p.x<1300&&p.y>250&&p.y<800);
@@ -59,7 +59,7 @@ try {
     await page.mouse.click(point.x+8,point.y+8);await settled(page);
     check(id+' nearby map area selects and zooms',(await state(page)).focusedPlace===id);
   }
-  await page.locator('#candidate-martin').click();await settled(page);
+  await page.locator('#map-focus-martin').click();await settled(page);
   await page.locator('#top-view').click();await settled(page);const plan=await state(page);
   check('Top-down view is orthographic and preserves selection',plan.top&&plan.selected==='martin'&&plan.focusedPlace==='martin'&&plan.camera.type==='OrthographicCamera'&&Math.abs(plan.camera.position[0]-plan.camera.target[0])<.01);
   await capture(page,'top-down.png');
@@ -68,9 +68,9 @@ try {
   let p=(await state(page)).screenPoints.find(p=>p.id==='martin');
   await page.mouse.move(p.x+8,p.y+8);await page.mouse.down();await page.mouse.move(p.x+80,p.y+28,{steps:10});await page.mouse.up();
   check('Dragging does not accidentally select a location',(await state(page)).focusedPlace===null);
-  await page.locator('#candidate-quay').click();await page.waitForTimeout(150);await page.mouse.move(1000,500);await page.mouse.down();await page.mouse.move(1080,530,{steps:5});await page.mouse.up();
+  await page.locator('#map-focus-quay').click();await page.waitForTimeout(150);await page.mouse.move(1000,500);await page.mouse.down();await page.mouse.move(1080,530,{steps:5});await page.mouse.up();
   check('Manual input interrupts animated camera movement',!(await state(page)).camera.moving);
-  await page.locator('#candidate-quay').click();await settled(page);
+  await page.locator('#map-focus-quay').click();await settled(page);
   await page.locator('#install-button').click();let s=await state(page);let quay=s.sites.find(s=>s.id==='quay');
   check('Install updates temperature and mist',s.installed.includes('quay')&&quay.after<quay.before&&s.stations.find(s=>s.id==='quay').mist);
   await slider(page,'power-slider',0);s=await state(page);quay=s.sites.find(s=>s.id==='quay');
@@ -80,8 +80,8 @@ try {
   const beforeCompare=await state(page),legend=await page.locator('.temperature-legend').innerText();
   await page.locator('#view-before').click();s=await state(page);check('Before comparison keeps baseline time, weather and scale',!s.after&&s.hour===beforeCompare.hour&&s.cloudy===beforeCompare.cloudy&&s.sites.every((site,i)=>site.before===beforeCompare.sites[i].before)&&s.stations.every(v=>!v.mist)&&legend===await page.locator('.temperature-legend').innerText());
   await page.locator('#view-after').click();check('After comparison restores installed mist',(await state(page)).stations.find(v=>v.id==='quay').mist);
-  await page.locator('#candidate-martin').click();await settled(page);check('Installations persist when selecting another candidate',(await state(page)).installed.includes('quay'));
-  await page.locator('#candidate-quay').click();await settled(page);await page.locator('#install-button').click();s=await state(page);quay=s.sites.find(s=>s.id==='quay');check('Removing unit removes its local cooling and mist',!s.installed.includes('quay')&&quay.before===quay.after&&!s.stations.find(v=>v.id==='quay').mist);
+  await page.locator('#map-focus-martin').click();await settled(page);check('Installations persist when selecting another candidate',(await state(page)).installed.includes('quay'));
+  await page.locator('#map-focus-quay').click();await settled(page);await page.locator('#install-button').click();s=await state(page);quay=s.sites.find(s=>s.id==='quay');check('Removing unit removes its local cooling and mist',!s.installed.includes('quay')&&quay.before===quay.after&&!s.stations.find(v=>v.id==='quay').mist);
   const at15=await state(page);await slider(page,'time-slider',9);const at9=await state(page);
   check('Time changes temperature, shade, flow and ranking while preserving selection',at9.selected===at15.selected&&at9.sites.some(a=>{const b=at15.sites.find(b=>b.id===a.id);return a.before!==b.before&&a.footfall!==b.footfall&&a.score!==b.score;})&&at9.sites.some(a=>a.shade!==at15.sites.find(b=>b.id===a.id).shade));
   await page.locator('#weather-toggle').click();const cloudy=await state(page);check('Weather changes baseline temperature and preserves selection',cloudy.cloudy&&cloudy.selected===at9.selected&&cloudy.sites.some(a=>a.before<at9.sites.find(b=>b.id===a.id).before));
@@ -98,7 +98,7 @@ try {
   await slider(page,'time-slider',15);await page.locator('#weather-toggle').click();await slider(page,'power-slider',65);
   await page.locator('#reset-view').click();await settled(page);await page.locator('#map-focus-opera').focus();await page.keyboard.press('Enter');await settled(page);check('Opera House label works with keyboard',(await state(page)).focusedPlace==='opera');await capture(page,'opera-house.png');
   await page.locator('#reset-view').click();await settled(page);p=(await state(page)).screenPoints.find(p=>p.id==='opera');await page.mouse.click(p.x+8,p.y+8);await settled(page);check('Opera House nearby map area frames the landmark',(await state(page)).focusedPlace==='opera');
-  await page.locator('#candidate-townhall').click();await settled(page);await capture(page,'street-detail.png');await page.locator('#zoom-in').click();await page.locator('#zoom-in').click();await page.mouse.move(1100,600);for(let i=0;i<28;i++){await page.mouse.wheel(0,-100);await page.waitForTimeout(30);}await page.waitForTimeout(700);await capture(page,'people-detail.png');
+  await page.locator('#map-focus-townhall').click();await settled(page);await capture(page,'street-detail.png');await page.locator('#zoom-in').click();await page.locator('#zoom-in').click();await page.mouse.move(1100,600);for(let i=0;i<28;i++){await page.mouse.wheel(0,-100);await page.waitForTimeout(30);}await page.waitForTimeout(700);await capture(page,'people-detail.png');
   }
   // True mobile/touch browser context; force network failure to exercise the bundled map.
   const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
@@ -106,13 +106,13 @@ try {
   await mobile.goto('http://127.0.0.1:4173');await ready(mobile);s=await state(mobile);report.cachedMap=s.map;
   check('Network failure loads the attributed bundled map',s.map.mode==='snapshot'&&s.map.buildingParts>2000&&(await mobile.locator('#map-source').innerText())==='Cached map data');
   await layoutCheck(mobile,'mobile');await capture(mobile,'mobile.png');
-  await mobile.locator('#candidate-quay').tap();await settled(mobile);check('Mobile touch selection zooms to Circular Quay',(await state(mobile)).focusedPlace==='quay');
+  await mobile.locator('#map-focus-quay').tap();await settled(mobile);check('Mobile touch selection zooms to Circular Quay',(await state(mobile)).focusedPlace==='quay');
   await mobile.locator('#inspector-toggle').tap();await capture(mobile,'mobile-details.png');await mobile.locator('#power-slider').scrollIntoViewIfNeeded();await slider(mobile,'power-slider',0);check('Mobile sheet exposes output and retains recommendation',(await state(mobile)).power===0&&await mobile.locator('#recommend-button').isVisible());await slider(mobile,'power-slider',65);await layoutCheck(mobile,'expandedMobile');await capture(mobile,'mobile-output.png');
   await mobile.locator('#inspector-toggle').tap();await mobile.locator('#top-view').tap();await settled(mobile);check('Mobile top-down view preserves selection',(await state(mobile)).top&&(await state(mobile)).selected==='quay');
   await mobile.locator('#reset-view').tap();await settled(mobile);
   await mobile.setViewportSize({width:320,height:740});await mobile.waitForTimeout(500);await layoutCheck(mobile,'narrowMobile');await capture(mobile,'mobile-320.png');
   await page.setViewportSize({width:1024,height:768});await page.locator('#reset-view').click();await settled(page);await layoutCheck(page,'smallDesktop');await capture(page,'desktop-1024.png');
-  const reduced=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});observe(reduced);await reduced.route('https://tiles.openfreemap.org/**',r=>r.abort('failed'));await reduced.goto('http://127.0.0.1:4173');await ready(reduced);await reduced.locator('#candidate-martin').click();await reduced.waitForTimeout(150);check('Reduced motion completes camera navigation immediately',!(await state(reduced)).camera.moving);
+  const reduced=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});observe(reduced);await reduced.route('https://tiles.openfreemap.org/**',r=>r.abort('failed'));await reduced.goto('http://127.0.0.1:4173');await ready(reduced);await reduced.locator('#map-focus-martin').click();await reduced.waitForTimeout(150);check('Reduced motion completes camera navigation immediately',!(await state(reduced)).camera.moving);
   // Expected failure is isolated from the normal console-error audit.
   const failure=await browser.newPage();await failure.route('https://tiles.openfreemap.org/**',r=>r.abort('failed'));await failure.route('**/data/sydney-openfreemap.geojson',r=>r.fulfill({status:503,body:'Unavailable'}));await failure.goto('http://127.0.0.1:4173');await failure.locator('#loading.failed button').waitFor();check('A useful English retry action appears when both data sources fail',await failure.locator('#loading.failed').getByRole('button',{name:'Try again'}).isVisible());
   await failure.unroute('**/data/sydney-openfreemap.geojson');await failure.getByRole('button',{name:'Try again',exact:true}).first().click();await ready(failure);check('Retry recovers after the bundled map becomes available',(await state(failure)).map.mode==='snapshot');

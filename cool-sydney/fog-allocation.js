@@ -1,4 +1,5 @@
 'use strict';
+const {orderAllocations}=require('./plan-output');
 // Area-level scenario proxies, not surveyed installation coordinates or demand counts.
 const ZONES=[
   {id:'martin-place',name:'Martin Place',proxy_site_id:'A002'},
@@ -8,15 +9,15 @@ const ZONES=[
 function parsePatch(text) {
   text=text.replace(/(?<=\d),(?=\d{3}(?:\D|$))/g,'');
   const patch={};
-  if(/-\s*\d+(?:\.\d+)?\s*(?:L\b|리터|대(?:\s|$)|(?:fog\s+)?(?:units|devices)\b)/i.test(text))throw new Error('Inventory and water budget cannot be negative.');
+  if(/-\s*\d+(?:\.\d+)?\s*(?:L\b|lit(?:er|re)s?\b|리터|대(?:\s|$)|(?:fog\s+)?(?:units|devices)\b)/i.test(text))throw new Error('Inventory and water budget cannot be negative.');
   const values=[...text.matchAll(/(\d+)\s*대(?!\d)/g)].map(m=>Number(m[1]));
   for(const m of text.matchAll(/(?:포그|장비)(?:가|는|를)?\s*(\d+)\s*(?:개|대)/g))values.push(Number(m[1]));
   for(const m of text.matchAll(/\b(\d+)\s+(?:fog\s+)?(?:units|devices)\b/gi))values.push(Number(m[1]));
   const unique=[...new Set(values)];
   if(unique.length===1){if(unique[0]>10000)throw new Error('장비 수는 0~10,000대 범위입니다.');patch.devices=unique[0];}
   if(/출퇴근[^.!?]*(고려하지|제외|빼|그만)|no commute/i.test(text))patch.commute_priority=false;
-  else if(/출퇴근[^.!?]*(고려해|고려하|우선해|우선하|우선으로|중점|가중)|(?:prioriti[sz]e|consider)\s+(?:the\s+)?commut|commut[^.!?]*priority/i.test(text))patch.commute_priority=true;
-  const water=[...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:L\b|리터)/gi)];if(water.length===1)patch.water_budget_l=Number(water[0][1]);
+  else if(/출퇴근[^.!?]*(고려해|고려하|우선해|우선하|우선으로|중점|가중|더\s*많은[^.!?]*혜택[^.!?]*(?:바꿔|조정|변경)|혜택[^.!?]*늘려)|(?:prioriti[sz]e|consider)\s+(?:the\s+)?commut|commut[^.!?]*priority|(?:revise|adjust|change)[^.!?]*more\s+people\s+benefit[^.!?]*commuting\s+hours/i.test(text))patch.commute_priority=true;
+  const water=[...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:L\b|lit(?:er|re)s?\b|리터)/gi)];if(water.length===1)patch.water_budget_l=Number(water[0][1]);
   const hours=[...text.matchAll(/(?<![\d-])(\d{1,2})(?::00|시)?\s*(?:부터|~|–|—|-|to)\s*(\d{1,2})(?::00|시)/gi)];
   if(hours.length===1){const start=Number(hours[0][1]),end=Number(hours[0][2]);if(start<0||end>24||start>=end)throw new Error('운영 시간은 시작보다 종료가 늦은 0~24시 범위여야 합니다.');patch.start_hour=start;patch.end_hour=end;}
   return patch;
@@ -39,7 +40,7 @@ function resolveConstraints(question,memories,explicit,conversation) {
   if(conversation?.conditions){constraints={...constraints,...conversation.conditions.constraints};previous=conversation.previous;}
   const inherited={...constraints};constraints={...constraints,...parsePatch(question)};
   if(explicit!=null){if(!Number.isInteger(explicit)||explicit<0||explicit>10000)throw new Error('장비 수는 0~10,000 정수여야 합니다.');constraints.devices=explicit;}
-  return {constraints,inherited,previous};
+  return {constraints,inherited,previous,previous_schedule:conversation?.previous_schedule||null};
 }
 function allocateFog(forecast,conditions,options={}) {
   const {constraints,previous}=conditions,n=constraints.devices;
@@ -87,10 +88,11 @@ function calculateAllocation(zones,conditions,start,end,metadata,peak=h=>(h>=7&&
     const minutes=n?Math.min(60,Math.floor((water/(n*12))*60+1e-9)):0,used=n*12*minutes/60;water=Math.max(0,water-used);
     schedule.push({hour:item.hour,active_minutes:minutes,water_l:used});
   }
-  const allocation=zones.map(({id,name,description,site_id,proxy_site_id,devices,score})=>({id,name,description,site_id,proxy_site_id,devices,demand_score:Math.round(score),change:previous?devices-(previous.find(p=>p.id===id)?.devices||0):null}));
+  const allocation=orderAllocations(zones.map(({id,name,description,site_id,proxy_site_id,devices,score,rows})=>({id,name,description,site_id,proxy_site_id,devices,operating_passages:rows.reduce((sum,r)=>sum+r.predicted_passages,0),demand_score:Math.round(score),change:previous?devices-(previous.find(p=>p.id===id)?.devices||0):null})));
   return {...metadata,method:'largest-remainder proportional allocation',constraints,operating_hours:{start_hour:start,end_hour:end},allocation,schedule:schedule.sort((a,b)=>a.hour-b.hour),
+    total_operating_passages:allocation.reduce((sum,row)=>sum+row.operating_passages,0),total_demand_score:allocation.reduce((sum,row)=>sum+row.demand_score,0),
     total_devices:allocation.reduce((s,z)=>s+z.devices,0),total_water_l:schedule.reduce((s,h)=>s+h.water_l,0),full_time_water_l:fullWater,
-    comparison:previous?{previous_devices:previous.reduce((sum,p)=>sum+p.devices,0),device_change:n-previous.reduce((sum,p)=>sum+p.devices,0),removed_sites:previous.filter(p=>!allocation.some(a=>a.id===p.id)).map(p=>({id:p.id,devices:0,change:-p.devices}))}:null,
+    comparison:previous?{schedule_changed:conditions.previous_schedule?conditions.previous_schedule.length!==schedule.length||schedule.some(row=>conditions.previous_schedule.find(old=>old.hour===row.hour)?.active_minutes!==row.active_minutes):null,previous_devices:previous.reduce((sum,p)=>sum+p.devices,0),device_change:n-previous.reduce((sum,p)=>sum+p.devices,0),removed_sites:previous.filter(p=>!allocation.some(a=>a.id===p.id)).map(p=>({id:p.id,devices:0,change:-p.devices}))}:null,
     assumptions:{water_l_per_device_hour:12,commute_weight:constraints.commute_priority?2:1,commute_hours:[...Array(24).keys()].filter(peak),schedule:'All allocated units share the hourly spray duration; highest weighted-demand hours receive water first.'},
     limitations:[...metadata.limitations,'Demand-proportional scenario, not global optimization or measured cooling.',
       'Water access, power, overlapping devices, weather and shade are not modeled.',

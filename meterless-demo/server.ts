@@ -1,4 +1,5 @@
 import http from "node:http";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
@@ -7,7 +8,11 @@ import { createApp } from "./src/local-ui.ts";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT ?? 8766);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be between 1 and 65535");
-const app = await createApp({ persistDir: path.join(here, ".notebook"), onError: console.error });
+const projectRoot=path.resolve(here,"..");
+const previousNotebook=path.basename(path.dirname(projectRoot))===".publish"?path.resolve(projectRoot,"../../meterless-demo/.notebook"):null;
+const localNotebook=path.join(here,".notebook");
+const persistDir=process.env.METERLESS_DATA_DIR||(fs.existsSync(path.join(localNotebook,"state.json"))?localNotebook:previousNotebook&&fs.existsSync(path.join(previousNotebook,"state.json"))?previousNotebook:localNotebook);
+const app = await createApp({ persistDir, onError: console.error });
 const server = http.createServer(async (incoming, outgoing) => {
   try {
     const host = incoming.headers.host;
@@ -38,8 +43,9 @@ const server = http.createServer(async (incoming, outgoing) => {
 server.requestTimeout = 15000;
 server.headersTimeout = 10000;
 server.on("error", (error: NodeJS.ErrnoException) => {
+  app.close();
   console.error(error.code === "EADDRINUSE" ? `포트 ${port}가 사용 중입니다. PORT=8767 npm start로 실행하세요.` : error);
   process.exitCode = 1;
 });
-server.listen(port, "127.0.0.1", () => console.log(`H-MEM 로컬 UI: http://127.0.0.1:${port}\n기억 저장 위치: ${path.join(here, ".notebook")}\n종료: Ctrl+C`));
-for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => server.close());
+server.listen(port, "127.0.0.1", () => console.log(`Cool Sydney agent + H-MEM: http://127.0.0.1:${port}\n기억 저장 위치: ${persistDir}\n종료: Ctrl+C`));
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => {app.close();server.close();});
