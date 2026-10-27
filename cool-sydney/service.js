@@ -82,7 +82,7 @@ function createService({ directory, env = process.env, transport = fetch, weathe
           const state = cbd.metadata();
           if (!state.ready) return { ...state, components:{ buildings:gis.metadata().ready ? { ready:true, version:gis.metadata().version } : { ready:false }, walk_graph:{ready:false}, trees:{ready:false}, pedestrian_counts:{ready:false}, weather:{ready:false} } };
           const { manifest } = await cbd.get();
-          return { ...state, bundle_version:manifest.bundle_version, date:manifest.date, components:Object.fromEntries(Object.entries(manifest.components).map(([key,version])=>[key,{ready:!!version,version}])), sources:manifest.sources, quality:manifest.quality, files:manifest.files, validation_status:manifest.validation_status };
+          return { ...state, bundle_version:manifest.bundle_version, date:manifest.date, components:Object.fromEntries(Object.entries(manifest.components).map(([key,version])=>[key,{ready:!!version && !(key==='pedestrian_counts' && manifest.sources.counts?.evidence_type==='unavailable'),version}])), sources:manifest.sources, quality:manifest.quality, files:manifest.files, validation_status:manifest.validation_status };
         }
         if (method === 'POST' && route === '/api/gis/cbd/import') {
           if (!gis.metadata().ready) throw new ApiError(422,'건물 GIS 자료를 먼저 가져오세요.');
@@ -101,7 +101,7 @@ function createService({ directory, env = process.env, transport = fetch, weathe
           if (`${day.year}-${day.month}-${day.day}`!==manifest.date) throw new ApiError(422,'묶음 날짜의 시각을 조회하세요.');
           const counts=tables.pedestrian_counts.filter(c=>c.instant_utc.startsWith(hour)).map(c=>({ ...c, passages:c.quality==='known-undercount'?null:c.passages }));
           const weather=tables.weather.find(w=>w.instant_utc.startsWith(hour))||null;
-          return { bundle_version:manifest.bundle_version, instant_utc:time.toISOString(), date:manifest.date, counts, weather, sites:tables.pedestrian_sites, limitations:['자동 계수는 2025년 6월에 종료됐습니다. 관측이 없는 구간은 수치를 추정하지 않습니다.','기상은 격자 재분석 자료이며 거리 수준의 실측이 아닙니다.'] };
+          return { bundle_version:manifest.bundle_version, instant_utc:time.toISOString(), date:manifest.date, counts_status:manifest.quality?.pedestrian_counts_status || 'observed', counts, weather, sites:tables.pedestrian_sites, limitations:['자동 계수는 2025년 6월에 종료됐습니다. 관측이 없는 구간은 수치를 추정하지 않습니다.','기상은 격자 재분석 자료이며 거리 수준의 실측이 아닙니다.'] };
         }
         if (method === 'POST' && route === '/api/gis/routes') {
           const { validateInput }=require('./cbd-route'), bundle=await cbd.get(), map=await gis.get();

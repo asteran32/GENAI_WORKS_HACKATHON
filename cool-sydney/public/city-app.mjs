@@ -328,7 +328,9 @@ async function loadObservations() {
   const available = observed.counts.filter(c => c.passages != null);
   $('counts-result').textContent = available.length
     ? `${dateValue()} ${hhmm(Math.floor(hour))} 현지시각 · ${available.length}개 센서 · 시간당 통과수 (고유 인원 아님)`
-    : '해당 시각의 유효 자동 계수 없음 · 미관측 구간은 채우지 않음';
+    : observed.counts_status === 'unavailable-source-ended'
+      ? '보행량 자료 없음 · 자동 계수는 2025년 6월 수집 종료 · 0명을 뜻하지 않음'
+      : '해당 시각의 유효 자동 계수 없음 · 미관측 구간은 채우지 않음';
   const counts = new Map(observed.counts.map(row => [row.site_id, row]));
   $('count-list').replaceChildren(...observed.sites.map(site => {
     const row = counts.get(site.id), value = row?.passages;

@@ -18,6 +18,15 @@ const SOURCES = Object.freeze({
 });
 const LICENSES = { trees: 'City of Sydney open data; portal licence must be checked for redistribution', sites: 'CC BY 4.0 (ArcGIS item)', counts: 'City of Sydney open data; portal licence must be checked for redistribution', walk: 'ODbL © OpenStreetMap contributors', weather: 'CC BY 4.0 data; free API non-commercial use' };
 const allowedHosts = new Set(['services1.arcgis.com', 'overpass-api.de', 'archive-api.open-meteo.com']);
+const COUNT_COVERAGE_SOURCE = 'https://data.nsw.gov.au/data/en/dataset/5-cityofsydney--automatic-hourly-pedestrian-count';
+function unavailableCounts(date) {
+  // The publisher states collection ended in June 2025. Do not invent rows,
+  // copy January demand, or present a synthetic empty response as a downloaded raw file.
+  if (date <= '2025-06-30') return null;
+  const status = 'unavailable-source-ended';
+  return { data:{features:[]}, hash:sha(JSON.stringify({date,status})), collected_at_utc:null,
+    availability:status, coverage_source_url:COUNT_COVERAGE_SOURCE };
+}
 function atomicJSON(location, value) { const temp = `${location}.${randomUUID()}.tmp`; fs.writeFileSync(temp, JSON.stringify(value)); fs.renameSync(temp, location); }
 function bounds(area = AREA, bufferM = 650) {
   const sw = project(area.west, area.south, area), ne = project(area.east, area.north, area);
@@ -171,18 +180,21 @@ function createCBDStore(root, { transport = fetch, env = process.env, gis } = {}
       const envelope = `${b.west},${b.south},${b.east},${b.north}`;
       const trees = await arcgis('trees',SOURCES.trees,'trees',{ where:'1=1', outFields:'OBJECTID,asset_id,TreeHeight,TreeCanopyNS,Tree_Status', geometry:envelope, geometryType:'esriGeometryEnvelope', inSR:4326, outSR:4326, spatialRel:'esriSpatialRelIntersects', f:'geojson' });
       const sites = await arcgis('sites',SOURCES.sites,'sites',{ where:'1=1', outFields:'OBJECTID,SiteID,Location,SiteDescription', outSR:4326, f:'geojson' });
-      const counts = await arcgis('counts',SOURCES.counts,`counts-local-${date}`,{ where:`Date >= TIMESTAMP '${date} 00:00:00' AND Date < TIMESTAMP '${window.next} 00:00:00'`, outFields:'ObjectId,Location_code,Date,Hour,TotalCount', orderByFields:'ObjectId', f:'json' },10);
+      const counts = unavailableCounts(date) || await arcgis('counts',SOURCES.counts,`counts-local-${date}`,{ where:`Date >= TIMESTAMP '${date} 00:00:00' AND Date < TIMESTAMP '${window.next} 00:00:00'`, outFields:'ObjectId,Location_code,Date,Hour,TotalCount', orderByFields:'ObjectId', f:'json' },10);
       const weatherURL = new URL(SOURCES.weather);
       for (const [k,v] of Object.entries({ latitude:AREA.latitude, longitude:AREA.longitude, start_date:window.start.slice(0,10), end_date:window.end.slice(0,10), hourly:'temperature_2m,relative_humidity_2m,wind_speed_10m,shortwave_radiation', wind_speed_unit:'ms', timezone:'UTC', models:'era5' })) weatherURL.searchParams.set(k,String(v));
       const weather = await fetchRaw('weather',weatherURL.href,`weather-${date}.json`);
       progress = { stage:'normalize', message:'자료를 정규화하고 품질을 확인합니다.', error:null };
       const tables = { walk_nodes:graph.nodes, walk_edges:graph.edges, trees:normalizeTrees(trees.data), pedestrian_sites:normalizeSites(sites.data,graph.edges), pedestrian_counts:normalizeCounts(counts.data,window,date), weather:normalizeWeather(weather.data,window) };
-      if (!tables.trees.length || tables.pedestrian_sites.length !== 4 || !tables.pedestrian_counts.length || tables.weather.length < 23) throw new Error('필수 자료의 유효 행이 부족합니다. 다른 날짜나 원천 상태를 확인하세요.');
+      if (!tables.trees.length || tables.pedestrian_sites.length !== 4 || (!counts.availability && !tables.pedestrian_counts.length) || tables.weather.length !== 24) throw new Error('필수 자료의 유효 행이 부족합니다. 다른 날짜나 원천 상태를 확인하세요.');
       const sources = Object.fromEntries([['walk',walk],['trees',trees],['sites',sites],['counts',counts],['weather',weather]].map(([key,value]) => [key,{ source_id:key, source_url:key==='walk'||key==='weather' ? value.url : SOURCES[key], source_hash:value.hash, source_revision:null, license:LICENSES[key], collected_at_utc:value.collected_at_utc, evidence_type:key==='weather'?'reanalysis':key==='counts'?'observed':key==='walk'?'derived':'observed' }]));
+      if (counts.availability) Object.assign(sources.counts, {evidence_type:'unavailable', availability:counts.availability, coverage_source_url:counts.coverage_source_url, source_hash:null});
       const buildingVersion = gis?.metadata().version || null;
       const components = { buildings:buildingVersion, walk_graph:`walk-${walk.hash.slice(0,16)}`, trees:`trees-${trees.hash.slice(0,16)}`, pedestrian_counts:`counts-${counts.hash.slice(0,16)}`, weather:`weather-${weather.hash.slice(0,16)}` };
-      const bundle_version = `cbd-${sha(JSON.stringify({ date,components,sites:sites.hash,schema:3 })).slice(0,16)}`;
+      const bundle_version = `cbd-${sha(JSON.stringify({ date,components,sites:sites.hash,schema:4 })).slice(0,16)}`;
       const quality = { tree_height_missing:tables.trees.filter(t=>t.height_m==null).length, tree_canopy_modelled:tables.trees.filter(t=>t.canopy_diameter_m!=null).length, site_match_ambiguous_or_missing:tables.pedestrian_sites.filter(s=>s.match_quality!=='nearest-unverified').length, counts_known_undercount:tables.pedestrian_counts.filter(c=>c.quality==='known-undercount').length, notes:['OSM 차도 중심선은 보도 위치가 검증되지 않았습니다.','TreeCanopyNS는 단위 미확인 원본값입니다. 모형 직경은 m 가정이며 수관 하단 높이도 가정입니다.','ArcGIS 계수 Date는 현지 벽시계를 UTC epoch에 담은 것으로 해석해 Australia/Sydney로 변환했습니다. 시간 구간 시작/끝 의미는 원천에서 확인되지 않았습니다.','Open-Meteo 일사는 표시 시각 직전 한 시간의 평균입니다.','과거 계수·기상과 최신 도시 형상을 결합한 시나리오입니다.'] };
+      quality.pedestrian_counts_status = counts.availability || 'observed';
+      if (counts.availability) quality.notes.push('자동 보행 계수는 2025년 6월 수집 종료. 이 날짜의 보행량은 미관측이며 0명이나 과거 날짜의 수요로 대체하지 않습니다.');
       const payload = { area_id:AREA.id, bundle_version, date, created_at_utc:new Date().toISOString(), components, sources, quality, tables };
       const staging = path.join(bundles,`.staging-${randomUUID()}`), final = path.join(bundles,bundle_version); fs.mkdirSync(staging); const input = path.join(staging,'input.json'); atomicJSON(input,payload);
       try {
@@ -198,4 +210,4 @@ function createCBDStore(root, { transport = fetch, env = process.env, gis } = {}
   }
   return { get, load, metadata() { const info=current(); return { ready:!!info, loading:!!inFlight, progress, ...(info||{}), area:AREA, readSource:'local-parquet' }; } };
 }
-module.exports = { SOURCES, bounds, dateWindow, walkQuery, walkingAccess, normalizeWalk, normalizeTrees, normalizeSites, normalizeCounts, normalizeWeather, createCBDStore };
+module.exports = { SOURCES, bounds, dateWindow, walkQuery, walkingAccess, normalizeWalk, normalizeTrees, normalizeSites, normalizeCounts, normalizeWeather, unavailableCounts, createCBDStore };

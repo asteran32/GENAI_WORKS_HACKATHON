@@ -22,6 +22,22 @@ Zetaris 에이전트 연결은 아직 구현 전입니다. 현재 `integrations.
 
 ## 실행
 
+2025-12-19 폭염 시나리오의 기상을 수집하고 시작하려면 저장소 루트에서 실행합니다.
+
+```bash
+bash scripts/run_dashboard.sh --date 2025-12-19
+```
+
+[BOM의 2025년 보고서](https://www.bom.gov.au/climate/current/annual/nsw/sydney.shtml)에 따르면 Sydney Observatory Hill은 이 날 연중 최고 42.2°C를 기록했습니다. 이 일 최고 관측값과 Open-Meteo ERA5 시간별 격자값은 서로 다른 자료이며 동일한 최고값을 강제하지 않습니다. [자동 보행 계수 원천](https://data.nsw.gov.au/data/en/dataset/5-cityofsydney--automatic-hourly-pedestrian-count)은 2025년 6월 수집이 종료됐습니다. 이후 날짜에는 계수 Parquet를 스키마가 있는 빈 테이블로 저장하고 `unavailable-source-ended`로 표시합니다. 0명이나 1월 관측으로 대체하지 않습니다. 건물·수목·보행망은 현재 저장된 형상이며 2025-12-19 당시 형상의 복원은 아닙니다. 다운로드 실패 시 기존 검증된 묶음을 유지합니다.
+
+현재 묶음의 **12개 Parquet를 Zetaris에 등록**하려면 Docker의 driver가 healthy인 상태에서 실행합니다. 로컬 JDK의 `javac`와 설치 ZIP에 포함된 JDBC jar를 사용하고, 로그인은 driver 컨테이너의 기존 관리자 환경변수를 사용합니다.
+
+```bash
+python3 scripts/register_zetaris.py
+```
+
+이 명령은 파일 해시와 버전을 확인하고 별도 `customer-data/shared/cool-sydney-registration/` 경로에 파일을 복사한 뒤, 버전별 `cool_sydney_<hash>` 파일 소스에 등록하고 12개 테이블의 SQL 행 수를 검증합니다. 기존 DB·볼륨은 삭제하지 않습니다. `--prepare-only`는 SQL만 준비합니다. 데이터/SQL 준비와 실제 등록 성공은 구분하며, 성공할 때만 `VERIFIED ... 12`가 표시됩니다. VDM 화면에서 Mart를 생성하고 이 테이블들을 추가하는 작업 및 대시보드의 조회 경로 전환은 별도입니다. 웹에서 관리자 비밀번호를 바꿨다면 컨테이너의 초기 자격증명으로 JDBC 로그인이 실패할 수 있습니다.
+
 처음 실행할 때는 저장소 루트에서 아래 한 명령을 사용합니다. Python 환경 확인 → 건물 GIS → 2025-01-15 보행망·수목·계수·기상 수집 → Parquet 검증 → 웹서버 시작 순서로 실행합니다. Git에는 대용량 데이터가 포함되지 않으므로 최초 수집에는 인터넷 연결이 필요합니다.
 
 ```bash

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { dateWindow, normalizeWalk, normalizeCounts, normalizeWeather } = require('../cbd-store');
+const { dateWindow, normalizeWalk, normalizeCounts, normalizeWeather, unavailableCounts } = require('../cbd-store');
 const { treeBlocked, route } = require('../cbd-route');
 const { AREA } = require('../city-data');
 
@@ -23,6 +23,18 @@ test('ArcGIS local wall-clock count converts to UTC and marks A004 fault interva
   assert.equal(summer[0].quality,'reported');
   assert.equal(normalizeCounts({features:[row('2022-07-10',10)]},dateWindow('2022-07-10'),'2022-07-10')[0].quality,'known-undercount');
   assert.equal(normalizeCounts({features:[row('2025-01-14',14)]},dateWindow('2025-01-15'),'2025-01-15').length,0);
+});
+test('December heatwave has Sydney-local hours and unavailable demand, never fabricated zero counts', () => {
+  const window = dateWindow('2025-12-19');
+  assert.equal(window.start, '2025-12-18T13:00:00.000Z');
+  assert.equal(window.end, '2025-12-19T13:00:00.000Z');
+  const missing = unavailableCounts('2025-12-19');
+  assert.equal(missing.availability, 'unavailable-source-ended');
+  assert.equal(missing.collected_at_utc, null);
+  assert.deepEqual(normalizeCounts(missing.data, window, '2025-12-19'), []);
+  assert.equal(unavailableCounts('2025-01-15'), null);
+  assert.equal(unavailableCounts('2025-06-30'), null);
+  assert.notEqual(missing.hash, unavailableCounts('2025-12-20').hash);
 });
 test('OSM graph preserves shared-node connectivity and separates bridge level', () => {
   const elements=[];
@@ -73,6 +85,15 @@ test('CBD Parquet preserves geometry and refuses a changed file hash', t => {
   const read=JSON.parse(execFileSync(python,[script,'read',dest],{encoding:'utf8'}));
   assert.deepEqual(read.tables.walk_edges[0].geometry,line);
   assert.equal(read.tables.pedestrian_counts[0].passages,100);
+  payload.date = '2025-12-19';
+  payload.tables.pedestrian_counts = [];
+  payload.quality.pedestrian_counts_status = 'unavailable-source-ended';
+  fs.writeFileSync(source, JSON.stringify(payload));
+  execFileSync(python,[script,'write',source,dest]);
+  const missing = JSON.parse(execFileSync(python,[script,'read',dest],{encoding:'utf8'}));
+  assert.deepEqual(missing.tables.pedestrian_counts, []);
+  assert.equal(missing.manifest.quality.pedestrian_counts_status, 'unavailable-source-ended');
+  assert.equal(missing.manifest.files.find(f=>f.name==='pedestrian_counts.parquet').rows, 0);
   fs.appendFileSync(path.join(dest,'trees.parquet'),'corrupt');
   assert.throws(()=>execFileSync(python,[script,'read',dest],{stdio:'pipe'}),/Command failed/);
 });
