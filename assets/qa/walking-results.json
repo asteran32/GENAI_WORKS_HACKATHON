@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-10-27T14:54:54.375Z",
+  "checks": [
+    "Every visible pedestrian has a validated walking route",
+    "People actually travel along streets rather than walking in place",
+    "Travel remains at a restrained human walking speed",
+    "Hiding pedestrians pauses their motion",
+    "Showing pedestrians resumes without jumping ahead",
+    "Time-dependent crowd counts update while retaining safe motion",
+    "All sampled positions stay outside buildings and water throughout the close-up",
+    "Walking motion runs on the mobile viewport",
+    "Reduced-motion preference keeps pedestrians still",
+    "No relevant browser console or runtime errors"
+  ],
+  "errors": [],
+  "displacementMetres": {
+    "min": 0.4130533015006163,
+    "max": 2.0285291409759005,
+    "mean": 1.5942823718856023
+  },
+  "result": "passed"
+}

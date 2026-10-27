@@ -1,0 +1,108 @@
+{
+  "checkedAt": "2026-10-27T14:21:47.772Z",
+  "checks": [
+    "Real live OpenFreeMap building and street geometry loaded",
+    "All candidates are outside buildings and water",
+    "Australian English document and UI",
+    "desktop has no horizontal scroll, overlapping panels or covered location labels",
+    "quay list selection zooms and keeps the selected map marker",
+    "quay focus is visible beside the inspector",
+    "quay clickable map label selects and zooms",
+    "quay nearby map area selects and zooms",
+    "martin list selection zooms and keeps the selected map marker",
+    "martin focus is visible beside the inspector",
+    "martin clickable map label selects and zooms",
+    "martin nearby map area selects and zooms",
+    "townhall list selection zooms and keeps the selected map marker",
+    "townhall focus is visible beside the inspector",
+    "townhall clickable map label selects and zooms",
+    "townhall nearby map area selects and zooms",
+    "Top-down view is orthographic and preserves selection",
+    "Return to 3D preserves focused location",
+    "Dragging does not accidentally select a location",
+    "Manual input interrupts animated camera movement",
+    "Install updates temperature and mist",
+    "Zero output means no temperature reduction or mist",
+    "Higher output increases cooling",
+    "Before comparison keeps baseline time, weather and scale",
+    "After comparison restores installed mist",
+    "Installations persist when selecting another candidate",
+    "Removing unit removes its local cooling and mist",
+    "Time changes temperature, shade, flow and ranking while preserving selection",
+    "Weather changes baseline temperature and preserves selection",
+    "Recommendation selects the current highest-ranked candidate",
+    "Visual shadows do not change thermal calculations",
+    "Tree presence changes independently from visual shadows",
+    "Natural comparison is bounded by the 18:00 scenario end",
+    "Natural change is zero at the scenario end",
+    "Play day restarts from morning at the end",
+    "Winter scenario uses AEST, not hard-coded AEDT",
+    "Opera House label works with keyboard",
+    "Opera House nearby map area frames the landmark",
+    "Network failure loads the attributed bundled map",
+    "mobile has no horizontal scroll, overlapping panels or covered location labels",
+    "Mobile touch selection zooms to Circular Quay",
+    "Mobile sheet exposes output and retains recommendation",
+    "expandedMobile has no horizontal scroll, overlapping panels or covered location labels",
+    "Mobile top-down view preserves selection",
+    "narrowMobile has no horizontal scroll, overlapping panels or covered location labels",
+    "smallDesktop has no horizontal scroll, overlapping panels or covered location labels",
+    "Reduced motion completes camera navigation immediately",
+    "A useful English retry action appears when both data sources fail",
+    "Retry recovers after the bundled map becomes available",
+    "No relevant console or runtime errors during working scenarios"
+  ],
+  "errors": [],
+  "screenshots": [
+    "desktop.png",
+    "top-down.png",
+    "opera-house.png",
+    "street-detail.png",
+    "people-detail.png",
+    "mobile.png",
+    "mobile-details.png",
+    "mobile-output.png",
+    "mobile-320.png",
+    "desktop-1024.png"
+  ],
+  "liveMap": {
+    "mode": "live",
+    "buildingParts": 2473,
+    "heatSegments": 17574,
+    "source": "https://tiles.openfreemap.org/planet/20261025_080012_pt/{z}/{x}/{y}.pbf",
+    "treeCount": 180
+  },
+  "desktop": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "cachedMap": {
+    "mode": "snapshot",
+    "buildingParts": 2473,
+    "heatSegments": 17574,
+    "source": "https://tiles.openfreemap.org/planet/20261025_080012_pt/{z}/{x}/{y}.pbf",
+    "treeCount": 180
+  },
+  "mobile": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "expandedMobile": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "narrowMobile": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "smallDesktop": {
+    "overflow": false,
+    "overlaps": [],
+    "coveredLabels": []
+  },
+  "result": "passed"
+}
