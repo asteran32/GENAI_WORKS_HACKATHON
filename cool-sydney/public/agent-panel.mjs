@@ -11,11 +11,24 @@ function allocationReport(plan){
   const passages=rows.every(row=>Number.isFinite(row.operating_passages))?rows.reduce((sum,row)=>sum+row.operating_passages,0):null;
   return {rows,total_devices:units,total_water_l:water,total_passages:passages,total_demand_score:rows.reduce((sum,row)=>sum+row.demand_score,0)};
 }
-function planExplanation(plan){
+function planExplanation(plan,language='ko'){
   const report=allocationReport(plan),c=plan.constraints,format=n=>n.toLocaleString('en-AU'),clock=h=>`${String(h).padStart(2,'0')}:00`;
   const active=plan.schedule.filter(h=>h.active_minutes>0);
   const eligible=(plan.assumptions?.commute_hours||[]).filter(h=>h>=plan.operating_hours.start_hour&&h<plan.operating_hours.end_hour);
   const changes=report.rows.filter(row=>row.change!=null&&row.change!==0);
+  if(language==='en'){
+    const lines=[
+      `Operating conditions: ${format(report.total_devices)} units · water budget ${c.water_budget_l==null?'not set':format(c.water_budget_l)+' L'} · ${clock(plan.operating_hours.start_hour)}–${clock(plan.operating_hours.end_hour)}.`,
+      `Demand evidence: ${plan.survey_period||'Forecast demand proxies from automatic counting sites'}. ${report.total_passages==null?'':`${format(report.total_passages)} passages during operating hours. `}These are not unique visitors or observations on the analysis date.`,
+      c.commute_priority?`Commute priority applied: ${eligible.length?eligible.map(h=>`${clock(h)}–${clock(h+1)}`).join(', ')+' demand weighted ×'+(plan.assumptions?.commute_weight||2):'no commuting hours fall within the operating window'}. Operating hours are unchanged.`:'No commute-priority weighting applied.',
+      'Units are allocated as integers in proportion to demand scores during operating hours. Water is assigned to the hours with the highest total weighted demand first.',
+      `Proposed operation: ${active.length?active.map(h=>`${clock(h.hour)}–${clock(h.hour+1)}: ${h.active_minutes} spray minutes`).join(', '):'no spraying'}. Total water usage: ${format(report.total_water_l)} L.`
+    ];
+    if(report.rows.some(row=>row.change!=null))lines.push(changes.length?`Changes from the previous plan: ${changes.map(row=>`${row.site_id?'Site '+row.site_id:row.name} ${row.devices-row.change}→${row.devices} units (${row.change>0?'+':''}${row.change})`).join(', ')}. Other retained sites keep the same unit counts.`:'Unit counts at each site are unchanged from the previous plan.');
+    if(plan.comparison?.schedule_changed===false)lines.push('The operating schedule is unchanged from the previous plan.');
+    lines.push(`Water usage assumes ${plan.assumptions?.water_l_per_device_hour??12} L per unit-hour. Weather, shade, water and power access, footpath clearance, and actual cooling beneficiaries are not modeled in this allocation.`);
+    return lines.join('\n\n');
+  }
   const lines=[
     `운영 조건: 장비 ${format(report.total_devices)}대 · 물 예산 ${c.water_budget_l==null?'미지정':format(c.water_budget_l)+'L'} · ${clock(plan.operating_hours.start_hour)}–${clock(plan.operating_hours.end_hour)}.`,
     `수요 근거: ${plan.survey_period||'자동 계수 지점의 예측 대리 수요'}. ${report.total_passages==null?'':`운영시간 내 통과량 합계 ${format(report.total_passages)}회. `}고유 방문자 수나 분석일 당일의 실측값을 뜻하지 않습니다.`,
@@ -71,7 +84,7 @@ function paint(run){
   $('agent-conditions').textContent=c?`Inventory ${c.devices??'Not set'} units · Water budget ${c.water_budget_l??'Not set'} L · Commute priority ${c.commute_priority?'On':'Off'}`:'';
   $('agent-allocation').replaceChildren();
   if(run.allocation)renderCalculatedPlan($('agent-allocation'),run.allocation);
-  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation):run.answer||(run.status==='failed'?'Could not create a plan. Ask the operator to inspect this run.':'Reviewing conditions and evidence…');
+  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation,run.response_language):run.answer||(run.status==='failed'?'Could not create a plan. Ask the operator to inspect this run.':'Reviewing conditions and evidence…');
   const saved=run.events.filter(e=>['memory_saved','memory_save_error'].includes(e.type)).at(-1);
   $('agent-save-notice').textContent=saved?(saved.type==='memory_saved'?'Operating conditions saved for future requests.':'Memory save failed. Continue this conversation to retain its conditions.'):'';
 }

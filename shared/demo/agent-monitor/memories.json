@@ -2,8 +2,179 @@
   "status": "connected",
   "mode": "recorded-snapshot",
   "scope": "cool-sydney",
-  "checked_at": "2026-10-27T15:02:53.460Z",
+  "checked_at": "2026-10-27T15:26:02.530Z",
   "memories": [
+    {
+      "id": "mem-12",
+      "content": "[cool-sydney:sydney-cbd-harbour] [conversation:83ca5789-6de2-4607-9505-494144226fc3] [운영 조건 JSON] {\"context_version\":1,\"conversation_id\":\"83ca5789-6de2-4607-9505-494144226fc3\",\"candidates\":{\"site_ids\":[105,43,38,50,102,235,107,39,36,106],\"survey_period\":\"2025 - Weekday - October\",\"source_run_id\":\"83ca5789-6de2-4607-9505-494144226fc3\"},\"constraints\":{\"devices\":30,\"commute_priority\":true,\"water_budget_l\":1500,\"start_hour\":10,\"end_hour\":18},\"plan\":[{\"id\":\"survey-105\",\"devices\":4},{\"id\":\"survey-43\",\"devices\":4},{\"id\":\"survey-38\",\"devices\":4},{\"id\":\"survey-50\",\"devices\":3},{\"id\":\"survey-102\",\"devices\":3},{\"id\":\"survey-235\",\"devices\":3},{\"id\":\"survey-107\",\"devices\":3},{\"id\":\"survey-39\",\"devices\":2},{\"id\":\"survey-36\",\"devices\":2},{\"id\":\"survey-106\",\"devices\":2}],\"request\":\"Our daily water budget has also been reduced to 1,500 liters. Which segments and operating periods should we prioritize keeping, and where should we reduce operations?\",\"date\":\"2025-12-19\",\"evidence_type\":\"user-preferences-and-unvalidated-scenario\",\"run_id\":\"8133fb4c-6565-49f7-b8d3-1e33dbfd7ee4\"}",
+      "type": "preference",
+      "layer": "working",
+      "timestamp": 1793114661034,
+      "lastAccessed": 1793114661034,
+      "accessCount": 0,
+      "tags": [
+        "cool-sydney",
+        "8133fb4c-6565-49f7-b8d3-1e33dbfd7ee4"
+      ],
+      "confidence": 0.5,
+      "source": "cool-sydney:run:8133fb4c-6565-49f7-b8d3-1e33dbfd7ee4",
+      "provenance": {
+        "origin": "manual",
+        "learnedAt": 1793114661034,
+        "label": "cool-sydney:run:8133fb4c-6565-49f7-b8d3-1e33dbfd7ee4"
+      },
+      "domain": "personal",
+      "namespace": "personal/profile",
+      "entities": [
+        "json",
+        "weekday",
+        "october",
+        "our",
+        "which"
+      ],
+      "relatedTo": [
+        "mem-10",
+        "mem-11",
+        "mem-2",
+        "mem-3",
+        "mem-4"
+      ]
+    },
+    {
+      "id": "mem-11",
+      "content": "[cool-sydney:sydney-cbd-harbour] [conversation:83ca5789-6de2-4607-9505-494144226fc3] [운영 조건 JSON] {\"context_version\":1,\"conversation_id\":\"83ca5789-6de2-4607-9505-494144226fc3\",\"candidates\":{\"site_ids\":[105,43,38,50,102,235,107,39,36,106],\"survey_period\":\"2025 - Weekday - October\",\"source_run_id\":\"83ca5789-6de2-4607-9505-494144226fc3\"},\"constraints\":{\"devices\":30,\"commute_priority\":true,\"water_budget_l\":3000,\"start_hour\":10,\"end_hour\":18},\"plan\":[{\"id\":\"survey-105\",\"devices\":4},{\"id\":\"survey-43\",\"devices\":4},{\"id\":\"survey-38\",\"devices\":4},{\"id\":\"survey-50\",\"devices\":3},{\"id\":\"survey-102\",\"devices\":3},{\"id\":\"survey-235\",\"devices\":3},{\"id\":\"survey-107\",\"devices\":3},{\"id\":\"survey-39\",\"devices\":2},{\"id\":\"survey-36\",\"devices\":2},{\"id\":\"survey-106\",\"devices\":2}],\"request\":\"We now have only 30 fog units available. Revise the plan while keeping the existing water budget, operating hours, and priorities unchanged.\",\"date\":\"2025-12-19\",\"evidence_type\":\"user-preferences-and-unvalidated-scenario\",\"run_id\":\"77266639-8950-44da-aff1-d0a807f574c6\"}",
+      "type": "preference",
+      "layer": "working",
+      "timestamp": 1793114633195,
+      "lastAccessed": 1793114646092,
+      "accessCount": 1,
+      "tags": [
+        "cool-sydney",
+        "77266639-8950-44da-aff1-d0a807f574c6"
+      ],
+      "confidence": 0.5,
+      "source": "cool-sydney:run:77266639-8950-44da-aff1-d0a807f574c6",
+      "provenance": {
+        "origin": "manual",
+        "learnedAt": 1793114633195,
+        "label": "cool-sydney:run:77266639-8950-44da-aff1-d0a807f574c6"
+      },
+      "domain": "personal",
+      "namespace": "personal/profile",
+      "entities": [
+        "json",
+        "weekday",
+        "october",
+        "revise"
+      ],
+      "relatedTo": [
+        "mem-10",
+        "mem-2",
+        "mem-3",
+        "mem-4",
+        "mem-5"
+      ]
+    },
+    {
+      "id": "mem-10",
+      "content": "[cool-sydney:sydney-cbd-harbour] [conversation:83ca5789-6de2-4607-9505-494144226fc3] [운영 조건 JSON] {\"context_version\":1,\"conversation_id\":\"83ca5789-6de2-4607-9505-494144226fc3\",\"candidates\":{\"site_ids\":[105,43,38,50,102,235,107,39,36,106],\"survey_period\":\"2025 - Weekday - October\",\"source_run_id\":\"83ca5789-6de2-4607-9505-494144226fc3\"},\"constraints\":{\"devices\":50,\"commute_priority\":true,\"water_budget_l\":3000,\"start_hour\":10,\"end_hour\":18},\"plan\":[{\"id\":\"survey-105\",\"devices\":7},{\"id\":\"survey-43\",\"devices\":6},{\"id\":\"survey-38\",\"devices\":6},{\"id\":\"survey-50\",\"devices\":6},{\"id\":\"survey-102\",\"devices\":6},{\"id\":\"survey-235\",\"devices\":4},{\"id\":\"survey-107\",\"devices\":4},{\"id\":\"survey-39\",\"devices\":4},{\"id\":\"survey-36\",\"devices\":4},{\"id\":\"survey-106\",\"devices\":3}],\"request\":\"Revise the plan so that more people benefit during commuting hours. Keep all other constraints unchanged, and show what changed compared with the previous plan.\",\"date\":\"2025-12-19\",\"evidence_type\":\"user-preferences-and-unvalidated-scenario\",\"run_id\":\"8a7a3548-dcf6-4924-a6bf-858e6988d948\"}",
+      "type": "preference",
+      "layer": "working",
+      "timestamp": 1793114607114,
+      "lastAccessed": 1793114646092,
+      "accessCount": 2,
+      "tags": [
+        "cool-sydney",
+        "8a7a3548-dcf6-4924-a6bf-858e6988d948"
+      ],
+      "confidence": 0.5,
+      "source": "cool-sydney:run:8a7a3548-dcf6-4924-a6bf-858e6988d948",
+      "provenance": {
+        "origin": "manual",
+        "learnedAt": 1793114607114,
+        "label": "cool-sydney:run:8a7a3548-dcf6-4924-a6bf-858e6988d948"
+      },
+      "domain": "personal",
+      "namespace": "personal/profile",
+      "entities": [
+        "json",
+        "weekday",
+        "october",
+        "revise",
+        "keep"
+      ],
+      "relatedTo": [
+        "mem-2",
+        "mem-3",
+        "mem-4",
+        "mem-5",
+        "mem-6"
+      ]
+    },
+    {
+      "id": "mem-9",
+      "content": "[cool-sydney:sydney-cbd-harbour] [conversation:83ca5789-6de2-4607-9505-494144226fc3] [운영 조건 JSON] {\"context_version\":1,\"conversation_id\":\"83ca5789-6de2-4607-9505-494144226fc3\",\"candidates\":{\"site_ids\":[105,43,50,38,102,235,107,36,39,106],\"survey_period\":\"2025 - Weekday - October\",\"source_run_id\":\"83ca5789-6de2-4607-9505-494144226fc3\"},\"constraints\":{\"devices\":50,\"commute_priority\":false,\"water_budget_l\":3000,\"start_hour\":10,\"end_hour\":18},\"plan\":[{\"id\":\"survey-105\",\"devices\":7},{\"id\":\"survey-43\",\"devices\":6},{\"id\":\"survey-50\",\"devices\":6},{\"id\":\"survey-38\",\"devices\":6},{\"id\":\"survey-102\",\"devices\":5},{\"id\":\"survey-235\",\"devices\":4},{\"id\":\"survey-107\",\"devices\":4},{\"id\":\"survey-36\",\"devices\":4},{\"id\":\"survey-39\",\"devices\":4},{\"id\":\"survey-106\",\"devices\":4}],\"request\":\"I want to deploy 50 fog units across the top 10 segments you just identified. The daily water budget is 3,000 liters, and operating hours are limited to 10:00–18:00.\",\"date\":\"2025-12-19\",\"evidence_type\":\"user-preferences-and-unvalidated-scenario\",\"run_id\":\"ccb5e5b5-0f6b-42f5-81f0-7e2a45db7f38\"}",
+      "type": "preference",
+      "layer": "working",
+      "timestamp": 1793114562595,
+      "lastAccessed": 1793114646092,
+      "accessCount": 3,
+      "tags": [
+        "cool-sydney",
+        "ccb5e5b5-0f6b-42f5-81f0-7e2a45db7f38"
+      ],
+      "confidence": 0.5,
+      "source": "cool-sydney:run:ccb5e5b5-0f6b-42f5-81f0-7e2a45db7f38",
+      "provenance": {
+        "origin": "manual",
+        "learnedAt": 1793114562595,
+        "label": "cool-sydney:run:ccb5e5b5-0f6b-42f5-81f0-7e2a45db7f38"
+      },
+      "domain": "tech",
+      "namespace": "tech/profile",
+      "entities": [
+        "json",
+        "weekday",
+        "october"
+      ],
+      "relatedTo": []
+    },
+    {
+      "id": "mem-8",
+      "content": "[cool-sydney:sydney-cbd-harbour] [conversation:83ca5789-6de2-4607-9505-494144226fc3] [운영 조건 JSON] {\"context_version\":1,\"conversation_id\":\"83ca5789-6de2-4607-9505-494144226fc3\",\"candidates\":{\"site_ids\":[50,105,107,102,43,106,235,39,38,36],\"survey_period\":\"2025 - Weekday - October\",\"source_run_id\":\"83ca5789-6de2-4607-9505-494144226fc3\"},\"constraints\":{\"devices\":null,\"commute_priority\":false,\"water_budget_l\":null},\"plan\":null,\"request\":\"Across all pedestrian survey sites, find the 10 street segments with the highest pedestrian counts during weekday commuting hours. For each segment, show its location, hourly pedestrian counts, and the survey period used for comparison.\",\"date\":\"2025-12-19\",\"evidence_type\":\"user-preferences-and-unvalidated-scenario\",\"run_id\":\"83ca5789-6de2-4607-9505-494144226fc3\"}",
+      "type": "preference",
+      "layer": "working",
+      "timestamp": 1793114529038,
+      "lastAccessed": 1793114646092,
+      "accessCount": 4,
+      "tags": [
+        "cool-sydney",
+        "83ca5789-6de2-4607-9505-494144226fc3"
+      ],
+      "confidence": 0.5,
+      "source": "cool-sydney:run:83ca5789-6de2-4607-9505-494144226fc3",
+      "provenance": {
+        "origin": "manual",
+        "learnedAt": 1793114529038,
+        "label": "cool-sydney:run:83ca5789-6de2-4607-9505-494144226fc3"
+      },
+      "domain": "personal",
+      "namespace": "personal/profile",
+      "entities": [
+        "json",
+        "weekday",
+        "october",
+        "across",
+        "for"
+      ],
+      "relatedTo": [
+        "mem-2",
+        "mem-3",
+        "mem-4",
+        "mem-5",
+        "mem-6"
+      ]
+    },
     {
       "id": "mem-7",
       "content": "[cool-sydney:sydney-cbd-harbour] [운영 조건 JSON] {\"context_version\":1,\"conversation_id\":\"ddd2fde2-6722-4df3-a3d6-a45bf4472c5e\",\"candidates\":{\"site_ids\":[50,105,107,102,43,106,235,39,38,36],\"survey_period\":\"2025 - Weekday - October\",\"source_run_id\":\"ddd2fde2-6722-4df3-a3d6-a45bf4472c5e\"},\"constraints\":{\"devices\":30,\"commute_priority\":false,\"water_budget_l\":1500,\"start_hour\":10,\"end_hour\":18},\"plan\":[{\"id\":\"survey-50\",\"devices\":4},{\"id\":\"survey-105\",\"devices\":4},{\"id\":\"survey-107\",\"devices\":3},{\"id\":\"survey-102\",\"devices\":3},{\"id\":\"survey-43\",\"devices\":4},{\"id\":\"survey-106\",\"devices\":2},{\"id\":\"survey-235\",\"devices\":3},{\"id\":\"survey-39\",\"devices\":2},{\"id\":\"survey-38\",\"devices\":3},{\"id\":\"survey-36\",\"devices\":2}],\"request\":\"물도 하루 1,500L만 사용할 수 있어. 어느 구간과 시간대를 우선 유지하고, 어디를 줄여야 할까?\",\"date\":\"2025-12-19\",\"evidence_type\":\"user-preferences-and-unvalidated-scenario\",\"run_id\":\"e24c15e7-cddd-4bfc-979d-034d8619e7bc\"}",

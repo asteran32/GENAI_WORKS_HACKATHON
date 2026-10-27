@@ -59,7 +59,7 @@ function loadConversation(previousId,get,catalog) {
     try{run=get(run.previous_run_id);}catch{break;}
   }
   const candidates=runs.map(r=>selectionFromRun(r,catalog)).filter(Boolean).at(-1)||null;
-  return {previous_run_id:latest.id,conversation_id:latest.conversation_id||latest.id,
+  return {previous_run_id:latest.id,conversation_id:latest.conversation_id||latest.id,memory_scope:latest.memory_scope||'area',
     messages:runs.flatMap(r=>[{role:'user',content:r.question.slice(0,3000)},{role:'assistant',content:(r.answer||'').slice(0,6000)}]),
     candidates,conditions:conditionsFromRun(latest),previous_schedule:latest.allocation?.schedule||latest.operating_conditions?.previous_schedule||null,previous:latest.allocation?.allocation||latest.operating_conditions?.previous||null};
 }

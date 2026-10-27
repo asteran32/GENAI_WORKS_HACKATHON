@@ -1,9 +1,69 @@
 {
   "schema_version": 1,
-  "captured_at": "2026-10-27T15:02:53.462Z",
+  "captured_at": "2026-10-27T15:26:02.532Z",
   "analysis_date": "2025-12-19",
-  "latest_plan_id": "e24c15e7-cddd-4bfc-979d-034d8619e7bc",
+  "latest_plan_id": "8133fb4c-6565-49f7-b8d3-1e33dbfd7ee4",
   "runs": [
+    {
+      "id": "8133fb4c-6565-49f7-b8d3-1e33dbfd7ee4",
+      "question": "Our daily water budget has also been reduced to 1,500 liters. Which segments and operating periods should we prioritize keeping, and where should we reduce operations?",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T15:24:06.069Z",
+      "provider": "gemini",
+      "previous_run_id": "77266639-8950-44da-aff1-d0a807f574c6",
+      "conversation_id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "response_language": "en",
+      "memory_scope": "conversation"
+    },
+    {
+      "id": "77266639-8950-44da-aff1-d0a807f574c6",
+      "question": "We now have only 30 fog units available. Revise the plan while keeping the existing water budget, operating hours, and priorities unchanged.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T15:23:42.811Z",
+      "provider": "gemini",
+      "previous_run_id": "8a7a3548-dcf6-4924-a6bf-858e6988d948",
+      "conversation_id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "response_language": "en",
+      "memory_scope": "conversation"
+    },
+    {
+      "id": "8a7a3548-dcf6-4924-a6bf-858e6988d948",
+      "question": "Revise the plan so that more people benefit during commuting hours. Keep all other constraints unchanged, and show what changed compared with the previous plan.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T15:22:56.523Z",
+      "provider": "gemini",
+      "previous_run_id": "ccb5e5b5-0f6b-42f5-81f0-7e2a45db7f38",
+      "conversation_id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "response_language": "en",
+      "memory_scope": "conversation"
+    },
+    {
+      "id": "ccb5e5b5-0f6b-42f5-81f0-7e2a45db7f38",
+      "question": "I want to deploy 50 fog units across the top 10 segments you just identified. The daily water budget is 3,000 liters, and operating hours are limited to 10:00–18:00.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T15:22:21.100Z",
+      "provider": "gemini",
+      "previous_run_id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "conversation_id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "response_language": "en",
+      "memory_scope": "conversation"
+    },
+    {
+      "id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "question": "Across all pedestrian survey sites, find the 10 street segments with the highest pedestrian counts during weekday commuting hours. For each segment, show its location, hourly pedestrian counts, and the survey period used for comparison.",
+      "date": "2025-12-19",
+      "status": "completed",
+      "created_at": "2026-10-27T15:21:49.715Z",
+      "provider": "gemini",
+      "previous_run_id": null,
+      "conversation_id": "83ca5789-6de2-4607-9505-494144226fc3",
+      "response_language": "en",
+      "memory_scope": "conversation"
+    },
     {
       "id": "e24c15e7-cddd-4bfc-979d-034d8619e7bc",
       "question": "물도 하루 1,500L만 사용할 수 있어. 어느 구간과 시간대를 우선 유지하고, 어디를 줄여야 할까?",
@@ -69,6 +129,6 @@
   "notes": [
     "Recorded executions, not fresh model or SQL calls. No credentials or live services are required to view them.",
     "Original model responses are retained for debugging, including historical mistakes. Displayed plan numbers are derived from stored calculation rows.",
-    "The recorded commute-priority request was not recognized by the older parser. These historical runs retain commute_priority=false; new code fixes the parser."
+    "Older Korean runs retain the original commute-priority parsing mistake. English runs use the corrected parser and separate scenario memories; their recorded conditions show the actual applied priority."
   ]
 }

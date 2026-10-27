@@ -9,15 +9,15 @@ const ZONES=[
 function parsePatch(text) {
   text=text.replace(/(?<=\d),(?=\d{3}(?:\D|$))/g,'');
   const patch={};
-  if(/-\s*\d+(?:\.\d+)?\s*(?:L\b|리터|대(?:\s|$)|(?:fog\s+)?(?:units|devices)\b)/i.test(text))throw new Error('Inventory and water budget cannot be negative.');
+  if(/-\s*\d+(?:\.\d+)?\s*(?:L\b|lit(?:er|re)s?\b|리터|대(?:\s|$)|(?:fog\s+)?(?:units|devices)\b)/i.test(text))throw new Error('Inventory and water budget cannot be negative.');
   const values=[...text.matchAll(/(\d+)\s*대(?!\d)/g)].map(m=>Number(m[1]));
   for(const m of text.matchAll(/(?:포그|장비)(?:가|는|를)?\s*(\d+)\s*(?:개|대)/g))values.push(Number(m[1]));
   for(const m of text.matchAll(/\b(\d+)\s+(?:fog\s+)?(?:units|devices)\b/gi))values.push(Number(m[1]));
   const unique=[...new Set(values)];
   if(unique.length===1){if(unique[0]>10000)throw new Error('장비 수는 0~10,000대 범위입니다.');patch.devices=unique[0];}
   if(/출퇴근[^.!?]*(고려하지|제외|빼|그만)|no commute/i.test(text))patch.commute_priority=false;
-  else if(/출퇴근[^.!?]*(고려해|고려하|우선해|우선하|우선으로|중점|가중|더\s*많은[^.!?]*혜택[^.!?]*(?:바꿔|조정|변경)|혜택[^.!?]*늘려)|(?:prioriti[sz]e|consider)\s+(?:the\s+)?commut|commut[^.!?]*priority/i.test(text))patch.commute_priority=true;
-  const water=[...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:L\b|리터)/gi)];if(water.length===1)patch.water_budget_l=Number(water[0][1]);
+  else if(/출퇴근[^.!?]*(고려해|고려하|우선해|우선하|우선으로|중점|가중|더\s*많은[^.!?]*혜택[^.!?]*(?:바꿔|조정|변경)|혜택[^.!?]*늘려)|(?:prioriti[sz]e|consider)\s+(?:the\s+)?commut|commut[^.!?]*priority|(?:revise|adjust|change)[^.!?]*more\s+people\s+benefit[^.!?]*commuting\s+hours/i.test(text))patch.commute_priority=true;
+  const water=[...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:L\b|lit(?:er|re)s?\b|리터)/gi)];if(water.length===1)patch.water_budget_l=Number(water[0][1]);
   const hours=[...text.matchAll(/(?<![\d-])(\d{1,2})(?::00|시)?\s*(?:부터|~|–|—|-|to)\s*(\d{1,2})(?::00|시)/gi)];
   if(hours.length===1){const start=Number(hours[0][1]),end=Number(hours[0][2]);if(start<0||end>24||start>=end)throw new Error('운영 시간은 시작보다 종료가 늦은 0~24시 범위여야 합니다.');patch.start_hour=start;patch.end_hour=end;}
   return patch;

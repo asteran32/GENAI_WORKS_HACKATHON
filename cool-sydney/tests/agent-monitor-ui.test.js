@@ -82,7 +82,7 @@ test('monitor continues the selected completed run and can explicitly start a ne
     fetch:async(url,options)=>{
       let data;
       if(options.method==='POST'){posts.push(JSON.parse(options.body));latest={...old,id:'22345678-1234-1234-1234-123456789abc',question:posts.at(-1).question};data={id:latest.id};}
-      else if(url.endsWith('/status'))data={date:old.date,dependency_installed:true,catalog_ready:true,conversation_supported:true,trace_version:4,providers:{gemini:{configured:true}}};
+      else if(url.endsWith('/status'))data={date:old.date,dependency_installed:true,catalog_ready:true,conversation_supported:true,fresh_start_supported:true,trace_version:6,providers:{gemini:{configured:true}}};
       else if(url.endsWith('/catalog'))data={};
       else if(url.endsWith('/graph'))data=graph;
       else if(url.endsWith('/memories'))data={status:'connected',memories:[],checked_at:new Date().toISOString()};
@@ -98,6 +98,17 @@ test('monitor continues the selected completed run and can explicitly start a ne
   await new Promise(r=>setTimeout(r,10));
   ids['agent-continue'].checked=false;ids['agent-continue'].listeners.change();ids['agent-question'].value='A different plan';
   await ids['agent-run'].listeners.click();assert.equal(posts[1].previous_run_id,null);
+  await new Promise(r=>setTimeout(r,10));
+  assert.equal(ids['agent-continue'].checked,true,'following a new request must continue the new result automatically');
+  ids['agent-devices'].value='99';ids['agent-remember-request'].checked=false;
+  ids['agent-new-scenario'].listeners.click();
+  assert.equal(ids['agent-continue'].checked,false);assert.equal(ids['agent-devices'].value,'');assert.equal(ids['agent-remember-request'].checked,true);
+  assert.match(ids['agent-context-note'].textContent,/Earlier conversations and memories will not be used/);
+  ids['agent-question'].value='Start over in English';await ids['agent-run'].listeners.click();
+  assert.equal(posts[2].fresh_start,true);assert.equal(posts[2].previous_run_id,null);assert.equal(posts[2].devices,null);
+  await new Promise(r=>setTimeout(r,10));
+  ids['agent-question'].value='Now allocate 50 units';await ids['agent-run'].listeners.click();
+  assert.equal(posts[3].fresh_start,false);assert.equal(posts[3].previous_run_id,latest.id);
   await new Promise(r=>setTimeout(r,10));
 });
 

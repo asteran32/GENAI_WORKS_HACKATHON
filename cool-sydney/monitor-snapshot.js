@@ -45,11 +45,11 @@ function exportSnapshot({projectRoot,memoryFile}){
   write('catalog.json',catalog);write('graph.json',runs[0].graph);
   write('memories.json',{status:'connected',mode:'recorded-snapshot',scope:'cool-sydney',checked_at:new Date().toISOString(),memories:[...memories.values()].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0))});
   const manifest={schema_version:1,captured_at:new Date().toISOString(),analysis_date:catalog.analysis_date,latest_plan_id:runs.find(run=>run.plan)?.id||null,
-    runs:runs.map(({id,question,date,status,created_at,provider,previous_run_id,conversation_id})=>({id,question,date,status,created_at,provider,previous_run_id,conversation_id:conversation_id||id})),
+    runs:runs.map(({id,question,date,status,created_at,provider,previous_run_id,conversation_id,response_language,memory_scope})=>({id,question,date,status,created_at,provider,previous_run_id,conversation_id:conversation_id||id,response_language,memory_scope})),
     mode:'recorded-replay',redactions:redactor.count(),
     notes:['Recorded executions, not fresh model or SQL calls. No credentials or live services are required to view them.',
       'Original model responses are retained for debugging, including historical mistakes. Displayed plan numbers are derived from stored calculation rows.',
-      'The recorded commute-priority request was not recognized by the older parser. These historical runs retain commute_priority=false; new code fixes the parser.']};
+      'Older Korean runs retain the original commute-priority parsing mistake. English runs use the corrected parser and separate scenario memories; their recorded conditions show the actual applied priority.']};
   write('manifest.json',manifest);
   return {directory:target,runs:runs.length,plans:runs.filter(r=>r.plan).length,memories:memories.size,redactions:redactor.count()};
 }

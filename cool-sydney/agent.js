@@ -28,8 +28,8 @@ const TOOLS=[
     nozzle_flow_lpm:{type:'number',minimum:0,maximum:1},evaporation_fraction:{type:'number',minimum:0,maximum:1},airflow_m3_s:{type:'number',minimum:0.1,maximum:100}
   },['instant_utc','devices','hours'])
 ];
-function systemPrompt(catalog) {
-  return `You are the Cool Sydney fog placement and operations review agent. Respond to the user in Korean. The analysis date is ${catalog.analysis_date}, in the Australia/Sydney time zone.
+function systemPrompt(catalog,language='ko') {
+  return `You are the Cool Sydney fog placement and operations review agent. Respond to the user in ${language==='en'?'English':'Korean'}. The analysis date is ${catalog.analysis_date}, in the Australia/Sydney time zone.
 Handle ordinary requests such as "Place our fog units" or "Prioritize commute hours" without requiring the user to mention the analysis date, Zetaris, Meterless, SQL, or tool names. Use the supplied analysis date when the user omits it. Choose data sources and tools internally based on the task; do not ask the user to operate the agent workflow.
 The context-loading step has already recalled scoped Meterless memories and resolved operating_conditions. For follow-up changes, preserve the previous inventory, water budget, operating hours, and priorities unless the current request explicitly changes them. Follow the resolved current constraints over older snapshots. Ask only for essential constraints that are missing or conflicting; never fabricate remembered conditions when recall fails. Memory persistence is handled by the backend according to the user's save preference: do not claim that a memory was saved yourself.
 Previous conversation messages and verified_candidates are supplied when continuing a run. Resolve phrases such as "those ten sites" using those IDs. Preserve the selected candidates unless the user asks to change them. Do not invent a plan or numerical allocation without a successful allocate_fog result. If conditions are missing or allocation fails, explain what is missing instead of claiming success.
@@ -66,6 +66,7 @@ function traceMessage(message) {
 }
 function stableArgs(value){if(Array.isArray(value))return value.map(stableArgs);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,stableArgs(value[k])]));return value;}
 function createNodes({catalog,question,memory,query,model,emit,signal,forecasts,devices,onConditions,onPlan,conversation={messages:[]},onCandidates,runId,onExport}) {
+  const responseLanguage=/[가-힣]/.test(question)?'ko':'en';
   const weather=new Map(),toolCache=new Map();let toolExecutions=0; let conditions,memories=[],memoryStatus='connected',candidates=conversation.candidates||null,lastPlan=null;
   const nodes={
     async load_catalog() {
@@ -73,14 +74,19 @@ function createNodes({catalog,question,memory,query,model,emit,signal,forecasts,
       emit('catalog_snapshot',{catalog:catalogSummary(catalog)});return {};
     },
     async recall_memory() {
-      try {memories=await memory.recall(catalog,signal);memoryStatus='connected';emit('memory',{status:memoryStatus,memories});}
+      try {
+        const conversationId=conversation.memory_scope==='conversation'?conversation.conversation_id:null;
+        memories=await memory.recall(catalog,signal,conversationId);
+        if(conversationId)memories=memories.filter(m=>m.content?.includes(`[conversation:${conversationId}]`));
+        memoryStatus='connected';emit('memory',{status:memoryStatus,memories,scope:conversationId?'conversation':'area',conversation_id:conversationId});
+      }
       catch(error){if(signal.aborted)throw error;memories=[];memoryStatus='unavailable';emit('memory',{status:memoryStatus,error:error.message});}
       return {};
     },
     async compose_prompt() {
       conditions=resolveConstraints(question,memories,devices,conversation);
       emit('conversation_context',{previous_run_id:conversation.previous_run_id||null,turns:(conversation.messages||[]).length/2,candidates,legacy_correction:conversation.conditions?.legacy_correction});onConditions?.(conditions);emit('operating_conditions',conditions);
-      const messages=[{role:'system',content:systemPrompt(catalog)},...(conversation.messages||[]),
+      const messages=[{role:'system',content:systemPrompt(catalog,responseLanguage)},...(conversation.messages||[]),
         {role:'user',content:JSON.stringify({question,date:catalog.analysis_date,memory_status:memoryStatus,memories,operating_conditions:conditions,verified_candidates:candidates,previous_run_id:conversation.previous_run_id||null})}];
       emit('context_prompt',{messages:messages.map(traceMessage),tools:TOOLS});
       return {messages,calls:0,answer:''};
@@ -182,7 +188,7 @@ function createNodes({catalog,question,memory,query,model,emit,signal,forecasts,
     },
     async finish(state) {
       const last=state.messages.at(-1);
-      const answer=lastPlan?planExplanation(lastPlan):last?.tool_calls?.length?'도구 호출 한도에 도달했습니다. 실행 기록을 확인하고 질문을 좁혀 다시 요청하세요.':last?.content || '답변을 생성하지 못했습니다.';
+      const answer=lastPlan?planExplanation(lastPlan,responseLanguage):last?.tool_calls?.length?(responseLanguage==='en'?'Tool call limit reached. Review the execution trace and narrow your request.':'도구 호출 한도에 도달했습니다. 실행 기록을 확인하고 질문을 좁혀 다시 요청하세요.'):last?.content || (responseLanguage==='en'?'Could not generate an answer.':'답변을 생성하지 못했습니다.');
       emit('answer',{text:answer,source:lastPlan?'calculation':'model',model_calls:state.calls});return {answer};
     }
   };
@@ -231,7 +237,7 @@ function createAgent({root,env=process.env,transport=fetch,query,model,memory,fo
     let dependency=false,catalog=null,error=null;
     try {require.resolve('@langchain/langgraph');dependency=true;}catch{}
     try {catalog=readCatalog(root);}catch(e){error=e.message;}
-    return {framework:'LangGraph',trace_version:5,conversation_supported:true,plan_export_supported:true,dependency_installed:dependency,model_configured:!!modelConfig(env).key?.trim(),provider:modelConfig(env).provider,providers:providers(env),
+    return {framework:'LangGraph',trace_version:6,conversation_supported:true,fresh_start_supported:true,plan_export_supported:true,dependency_installed:dependency,model_configured:!!modelConfig(env).key?.trim(),provider:modelConfig(env).provider,providers:providers(env),
       catalog_ready:!!catalog,catalog_error:error,date:catalog?.analysis_date,database:catalog?.database,
       memory_url:env.METERLESS_BASE_URL||'http://127.0.0.1:8766',sql_transport:'docker-jdbc',external_connections_verified:false};
   }
@@ -246,12 +252,17 @@ function createAgent({root,env=process.env,transport=fetch,query,model,memory,fo
     if(active.size)throw new Error('에이전트가 실행 중입니다. 완료 후 다시 요청하세요.');
     const catalog=readCatalog(root);
     if(input.date!==catalog.analysis_date)throw new Error(`현재 묶음의 분석 날짜는 ${catalog.analysis_date}입니다.`);
+    if(input.fresh_start!==undefined&&typeof input.fresh_start!=='boolean')throw new Error('fresh_start must be a boolean.');
+    if(input.fresh_start&&input.previous_run_id)throw new Error('A new scenario cannot continue a previous run.');
     const conversation=loadConversation(input.previous_run_id,get,catalog);
     const config=modelConfig(env,input.provider);
     if(!model && !config.key?.trim())throw new Error(`저장소 .env에 ${config.provider==='gemini'?'GEMINI_API_KEY':'MODEL_API_KEY'}를 설정하고 서버를 재시작하세요.`);
     try {require.resolve('@langchain/langgraph');}catch{throw new Error('cool-sydney 폴더에서 npm install을 실행하세요. LangGraph가 설치되지 않았습니다.');}
     const run={context_version:1,previous_run_id:conversation.previous_run_id,conversation_id:conversation.conversation_id,candidates:conversation.candidates,provider:config.provider,model:config.model,id:randomUUID(),status:'queued',question:input.question.trim(),date:input.date,catalog_version:catalog.catalog_version,database:catalog.database,created_at:new Date().toISOString(),events:[],answer:null,remember_request:input.remember_request===true};
     run.conversation_id ||= run.id;
+    run.memory_scope=input.fresh_start?'conversation':conversation.memory_scope||'area';
+    run.response_language=/[가-힣]/.test(run.question)?'ko':'en';
+    Object.assign(conversation,{conversation_id:run.conversation_id,memory_scope:run.memory_scope});
     const controller=new AbortController(); active.set(run.id,controller);save(run);
     setImmediate(async()=>{
       const timer=setTimeout(()=>controller.abort(),180000);
@@ -272,7 +283,7 @@ function createAgent({root,env=process.env,transport=fetch,query,model,memory,fo
             const snapshot={context_version:1,conversation_id:run.conversation_id,candidates:run.candidates?{site_ids:run.candidates.site_ids,survey_period:run.candidates.survey_period,source_run_id:run.candidates.run_id}:null,constraints:run.operating_conditions.constraints,plan:run.allocation?.allocation||run.operating_conditions.previous||null,request:run.question.slice(0,500),date:run.date,evidence_type:'user-preferences-and-unvalidated-scenario',run_id:run.id};
             if(snapshot.plan)snapshot.plan=snapshot.plan.map(({id,devices})=>({id,devices}));
             if(JSON.stringify(snapshot).length>3500)snapshot.plan=null; // Full evidence and plan remain in the referenced local run.
-            const remembered=await mem.save(catalog,'[운영 조건 JSON] '+JSON.stringify(snapshot),run.id);
+            const remembered=await mem.save(catalog,'[운영 조건 JSON] '+JSON.stringify(snapshot),run.id,run.conversation_id);
             emit('memory_saved',{memory_id:remembered.memory?.id,kind:'operating-conditions',constraints:snapshot.constraints});
           }catch(error){emit('memory_save_error',{error:error.message});}
         }
@@ -299,7 +310,7 @@ function createAgent({root,env=process.env,transport=fetch,query,model,memory,fo
       if(typeof body?.text!=='string'||!body.text.trim()||body.text.length>3000)throw new Error('기억할 내용은 1~3,000자로 입력하세요.');
       const catalog=readCatalog(root);
       if(catalog.catalog_version!==run.catalog_version)throw new Error('실행 후 데이터 버전이 변경됐습니다. 다시 실행하세요.');
-      const result=await mem.save(catalog,`[사용자 검토 메모; 실측 결과 아님] 분석일 ${run.date}; catalog ${run.catalog_version}\n${body.text}`,id);
+      const result=await mem.save(catalog,`[사용자 검토 메모; 실측 결과 아님] 분석일 ${run.date}; catalog ${run.catalog_version}\n${body.text}`,id,run.conversation_id);
       const updated=get(id);updated.events.push({seq:updated.events.length+1,type:'memory_saved',at:new Date().toISOString(),memory_id:result.memory?.id,content:body.text});save(updated);
       return {memory_id:result.memory?.id,run_id:id};
     },

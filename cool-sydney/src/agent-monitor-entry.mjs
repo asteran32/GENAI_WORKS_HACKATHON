@@ -4,7 +4,7 @@ const graphView=createGraphView({svg:$('agent-graph'),detail:$('agent-graph-deta
 let graphStructure=initialGraph,graphRun=null;
 graphView.paint(graphStructure,null);
 $('agent-graph-status').textContent='Compiled graph from the app bundle. Checking the live server.';
-let runId=null, date='2025-12-19', polling=false,replayMode=false;
+let runId=null, date='2025-12-19', polling=false,replayMode=false,freshStart=false,freshSupported=false;
 const stateLabel={queued:'Pending',running:'Running',completed:'Complete',failed:'Failed'};
 const memoryVersions=new Map();
 let paintedVersion='';
@@ -70,10 +70,12 @@ async function api(url,body) {
   const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);return result;
 }
 async function refresh() {
-  const s=await api('/api/agent/status');replayMode=s.replay_mode===true;date=s.date||date;$('agent-date').textContent=date;
+  const s=await api('/api/agent/status');replayMode=s.replay_mode===true;freshSupported=s.fresh_start_supported===true;date=s.date||date;$('agent-date').textContent=date;
+  $('agent-new-scenario').disabled=polling||replayMode||!freshSupported;
+  $('agent-new-scenario').title=!freshSupported?'Restart the server on port 8765 to enable separate scenario memories.':'';
   const selected=s.providers?.[$('agent-provider').value];
-  $('agent-trace-notice').hidden=s.trace_version>=5;
-  $('agent-trace-notice').textContent=s.trace_version>=5?'':'The server on port 8765 is outdated. Restart it to enable conversation context, survey allocation and JSON export.';
+  $('agent-trace-notice').hidden=replayMode||s.trace_version>=6;
+  $('agent-trace-notice').textContent=replayMode||s.trace_version>=6?'':'Restart the server on port 8765 to enable new scenarios with separate memories and English conditions.';
   const blockers=[];
   if(replayMode){blockers.push(`Recorded demo · ${s.snapshot?.runs?.length||0} runs · read-only. Select a run to inspect its prompts, SQL and results.`);$('agent-follow-latest').checked=false;$('agent-run').textContent='Recorded demo';$('agent-show-date').disabled=true;}
   if(!replayMode){
@@ -102,7 +104,7 @@ function paint(run) {
   $('agent-conditions').textContent=c?`Inventory ${c.devices??'Not set'} units · Commute priority ${c.commute_priority?'On':'Off'} · Water budget ${c.water_budget_l??'Not set'} L`:'';
   $('agent-allocation').replaceChildren();
   if(run.allocation)paintAllocation(run.allocation);
-  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation):run.answer||run.error||'Retrieving evidence…';
+  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation,run.response_language):run.answer||run.error||'Retrieving evidence…';
   $('agent-trace').replaceChildren(...run.events.map(event=>{
     const li=document.createElement('li'),details=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');
     summary.textContent=`${event.seq}. ${event.type}${event.name?' · '+event.name:''} · ${event.at.slice(11,19)}`;
@@ -111,18 +113,23 @@ function paint(run) {
   $('agent-remember').disabled=replayMode||run.status!=='completed';
 }
 function paintContinuation(){
+  if(freshStart){$('agent-context-note').textContent='New scenario ready. Earlier conversations and memories will not be used. Remember conditions saves memories for this scenario.';return;}
   const previous=$('agent-continue').checked&&graphRun?.status==='completed'?graphRun:null;
-  $('agent-context-note').textContent=previous?`Continuing: ${previous.question.slice(0,130)} · ${previous.candidates?.site_ids?.length||0} selected sites. Conditions and the last plan carry forward.`:'New conversation. Saved operating preferences may still be recalled from Meterless.';
+  $('agent-context-note').textContent=previous?`Continuing: ${previous.question.slice(0,130)} · ${previous.candidates?.site_ids?.length||0} selected sites. Conditions and the last plan carry forward.${previous.memory_scope==='conversation'?' Only this scenario’s Meterless memories are recalled.':''}`:'New conversation. Saved operating preferences may still be recalled from Meterless. Use Start new scenario to keep them separate.';
 }
-$('agent-continue').addEventListener('change',paintContinuation);
+$('agent-continue').addEventListener('change',()=>{if($('agent-continue').checked)freshStart=false;paintContinuation();});
+$('agent-new-scenario').addEventListener('click',()=>{
+  if(polling||replayMode||!freshSupported)return;
+  freshStart=true;$('agent-continue').checked=false;$('agent-follow-latest').checked=false;$('agent-remember-request').checked=true;$('agent-devices').value='';paintContinuation();
+});
 function paintAllocation(plan){renderCalculatedPlan($('agent-allocation'),plan);}
 $('agent-run').addEventListener('click',async()=>{
   if(!$('agent-question').value.trim()){$('agent-status').textContent='Enter a question.';$('agent-question').focus();return;}
   if(polling||replayMode)return;
   $('agent-follow-latest').checked=true;
-  polling=true;$('agent-history').disabled=true;$('agent-run').disabled=true;$('agent-remember').disabled=true;$('agent-answer').textContent='Starting run…';$('agent-trace').replaceChildren();paintWorkflow(null);
+  polling=true;$('agent-new-scenario').disabled=true;$('agent-history').disabled=true;$('agent-run').disabled=true;$('agent-remember').disabled=true;$('agent-answer').textContent='Starting run…';$('agent-trace').replaceChildren();paintWorkflow(null);
   try {
-    const started=await api('/api/agent/runs',{question:$('agent-question').value,date,provider:$('agent-provider').value,devices:$('agent-devices').value.trim()===''?null:Number($('agent-devices').value),remember_request:$('agent-remember-request').checked,previous_run_id:$('agent-continue').checked&&graphRun?.status==='completed'?graphRun.id:null});runId=started.id;$('agent-devices').value='';
+    const started=await api('/api/agent/runs',{question:$('agent-question').value,date,provider:$('agent-provider').value,devices:$('agent-devices').value.trim()===''?null:Number($('agent-devices').value),remember_request:$('agent-remember-request').checked,previous_run_id:!freshStart&&$('agent-continue').checked&&graphRun?.status==='completed'?graphRun.id:null,fresh_start:freshStart});runId=started.id;$('agent-devices').value='';freshStart=false;$('agent-continue').checked=true;
     for(let i=0;i<65;i++) {
       const run=await api(`/api/agent/runs/${runId}`);paint(run);
       if(!['queued','running'].includes(run.status))break;

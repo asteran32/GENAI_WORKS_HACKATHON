@@ -9,8 +9,9 @@ async function request(url, body, transport, signal) {
   return response.json();
 }
 function memoryScope(catalog) { return `[cool-sydney:${catalog.area.id}]`; }
-function scopedMemories(memories, catalog) {
-  return memories.filter(m=>typeof m?.content==='string' && m.content.startsWith(memoryScope(catalog)))
+function conversationTag(id) { return `[conversation:${id}]`; }
+function scopedMemories(memories, catalog, conversationId) {
+  return memories.filter(m=>typeof m?.content==='string' && m.content.startsWith(memoryScope(catalog)) && (!conversationId || m.content.includes(conversationTag(conversationId))))
     .sort((a,b)=>Number(b.timestamp || 0)-Number(a.timestamp || 0)).slice(0,12)
     .map(m=>({id:m.id,content:m.content.slice(0,4000),source:m.source,provenance:m.provenance,confidence:m.confidence,updatedAt:m.updatedAt,createdAt:m.createdAt,timestamp:m.timestamp}));
 }
@@ -26,14 +27,14 @@ function createMemory(env, transport=fetch) {
       if(!Array.isArray(result.memories))throw new Error('Meterless 기억 응답 형식이 올바르지 않습니다.');
       return {status:'connected',scope:memoryScope(catalog),memories:scopedMemories(result.memories,catalog),checked_at:new Date().toISOString()};
     },
-    async recall(catalog, signal) {
-      const result = await request(endpoint(base,'/api/search'), { query:memoryScope(catalog), mode:'literal' }, transport, signal);
+    async recall(catalog, signal, conversationId) {
+      const result = await request(endpoint(base,'/api/search'), { query:conversationId?conversationTag(conversationId):memoryScope(catalog), mode:'literal' }, transport, signal);
       if (!Array.isArray(result.results)) throw new Error('Meterless 검색 응답 형식이 올바르지 않습니다.');
-      return scopedMemories(result.results.map(r=>r.memory),catalog);
+      return scopedMemories(result.results.map(r=>r.memory),catalog,conversationId);
     },
-    async save(catalog, content, runId) {
+    async save(catalog, content, runId, conversationId) {
       return request(endpoint(base,'/api/memories'), {
-        content:`${memoryScope(catalog)} ${content}`,
+        content:`${memoryScope(catalog)} ${conversationId?conversationTag(conversationId)+' ':''}${content}`,
         source:`cool-sydney:run:${runId}`, confidence:0.5, tags:['cool-sydney',runId]
       }, transport);
     }

@@ -4,6 +4,8 @@
 
 실행 기록만 보려면 저장소 루트에서 `node scripts/run_agent_monitor_demo.js`를 실행하고 **http://127.0.0.1:8766/**을 여세요. 커밋된 `shared/demo/agent-monitor/`를 읽으므로 npm 설치·H-MEM 엔진·8765 서버·API 키가 필요하지 않습니다. 새 질문과 기억 수정은 지원하지 않습니다. 기존 실행의 프롬프트, SQL, 도구 결과, 기억, 배분 JSON을 조회합니다.
 
+영어 대화 5단계(상위 10곳 조회 → 50대 배치 → 출퇴근 우선 → 30대로 축소 → 물 1,500L로 축소)가 포함되어 있습니다. Run history에서 **Across all pedestrian survey sites…**부터 순서대로 확인할 수 있습니다.
+
 ## 로컬 웹 UI
 
 기억 목록, 조건 저장·수정, 검색, 기억별·전체 변경 이력을 브라우저에서 확인할 수 있습니다. 공식 H-MEM 참조 엔진을 호출하며 CLI와 같은 `.notebook/` 데이터를 사용합니다. Node.js 22.19 이상을 사용하세요. 최초에는 저장소 루트에서 `npm --prefix meterless-demo ci`와 `npm --prefix meterless-demo run setup`으로 엔진을 준비합니다. 엔진이 준비되면 기본 실행에는 API 키가 필요하지 않습니다.

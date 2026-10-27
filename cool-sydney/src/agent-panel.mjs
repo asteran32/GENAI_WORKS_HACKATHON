@@ -19,7 +19,7 @@ function paint(run){
   $('agent-conditions').textContent=c?`Inventory ${c.devices??'Not set'} units · Water budget ${c.water_budget_l??'Not set'} L · Commute priority ${c.commute_priority?'On':'Off'}`:'';
   $('agent-allocation').replaceChildren();
   if(run.allocation)renderCalculatedPlan($('agent-allocation'),run.allocation);
-  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation):run.answer||(run.status==='failed'?'Could not create a plan. Ask the operator to inspect this run.':'Reviewing conditions and evidence…');
+  $('agent-answer').textContent=run.allocation?planExplanation(run.allocation,run.response_language):run.answer||(run.status==='failed'?'Could not create a plan. Ask the operator to inspect this run.':'Reviewing conditions and evidence…');
   const saved=run.events.filter(e=>['memory_saved','memory_save_error'].includes(e.type)).at(-1);
   $('agent-save-notice').textContent=saved?(saved.type==='memory_saved'?'Operating conditions saved for future requests.':'Memory save failed. Continue this conversation to retain its conditions.'):'';
 }

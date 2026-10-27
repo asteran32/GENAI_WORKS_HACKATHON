@@ -83,3 +83,60 @@ test('persisted LangGraph conversation ranks ten sites then allocates, repriorit
     assert.ok(fifth.events.some(e=>e.type==='survey_read'&&e.data.length===10));
   }finally{agent.close();fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('fresh English scenario isolates old memories, recalls its own conditions, and runs all five prompts',async()=>{
+  const {createMemory}=require('../agent-connectors');
+  const {parsePatch}=require('../fog-allocation');
+  const root=fixture(),records=[{id:'old',timestamp:1,content:'[cool-sydney:sydney-cbd-harbour] [conversation:old] [운영 조건 JSON] '+JSON.stringify({context_version:1,constraints:{devices:999,water_budget_l:1,commute_priority:true,start_hour:6,end_hour:24}})}];
+  const searches=[],prompts=[];
+  const memory=createMemory({},async(url,options)=>{
+    const body=JSON.parse(options.body);
+    if(url.endsWith('/api/search')){searches.push(body.query);return {ok:true,json:async()=>({results:records.filter(m=>m.content.includes(body.query)).map(memory=>({memory}))})};}
+    const entry={...body,id:'m'+records.length,timestamp:records.length+1};records.push(entry);return {ok:true,json:async()=>({memory:entry})};
+  });
+  const questions=[
+    'Across all pedestrian survey sites, find the 10 street segments with the highest pedestrian counts during weekday commuting hours. For each segment, show its location, hourly pedestrian counts, and the survey period used for comparison.',
+    'I want to deploy 50 fog units across the top 10 segments you just identified. The daily water budget is 3,000 liters, and operating hours are limited to 10:00–18:00. Create a plan showing how many units to place in each segment and when to operate them. Explain your recommendations and show the expected water usage.',
+    'Revise the plan so that more people benefit during commuting hours. Keep all other constraints unchanged, and show what changed compared with the previous plan.',
+    'We now have only 30 fog units available. Revise the plan while keeping the existing water budget, operating hours, and priorities unchanged.',
+    'Our daily water budget has also been reduced to 1,500 liters. Which segments and operating periods should we prioritize keeping, and where should we reduce operations?'
+  ];
+  const deps={root,env:{},memory,query:async sql=>structuredClone(sql.includes('SiteID IN')?hourly:ranking),model:async messages=>{
+    prompts.push(messages);assert.match(messages[0].content,/Respond to the user in English/);
+    if(messages.at(-1).role==='tool'){assert.equal(JSON.parse(messages.at(-1).content).error,undefined);return {message:{role:'assistant',content:'Here are the results.'}};}
+    const context=JSON.parse(messages.at(-1).content);
+    assert.ok(context.memories.every(m=>m.id!=='old'));
+    return {message:{role:'assistant',tool_calls:[context.question===questions[0]?call('execute_readonly_sql',{sql:ranking.sql}):call('allocate_fog',{})]}};
+  }};
+  let agent=createAgent(deps);
+  async function run(question,previous_run_id,remember_request=true){
+    const job=await agent.start({question,date,previous_run_id,fresh_start:!previous_run_id,remember_request});
+    for(let i=0;i<200;i++){const r=agent.get(job.id);if(!['queued','running'].includes(r.status)){assert.equal(r.status,'completed',r.error);return r;}await new Promise(r=>setTimeout(r,10));}
+    assert.fail('Run timed out');
+  }
+  try{
+    const runs=[await run(questions[0])],first=runs[0];
+    assert.equal(first.memory_scope,'conversation');assert.equal(first.previous_run_id,null);assert.equal(first.response_language,'en');
+    assert.deepEqual(first.operating_conditions.constraints,{devices:null,water_budget_l:null,commute_priority:false});
+    assert.equal(first.events.find(e=>e.type==='memory').memories.length,0);assert.equal(prompts[0].length,2);
+    agent.close();agent=createAgent(deps);
+    for(const question of questions.slice(1))runs.push(await run(question,runs.at(-1).id));
+    for(const [i,r]of runs.entries()){
+      assert.equal(r.conversation_id,first.id);assert.equal(r.memory_scope,'conversation');
+      assert.equal(r.events.find(e=>e.type==='memory').memories.length,i);
+      assert.doesNotMatch(r.answer,/[가-힣]/);
+      if(i)assert.deepEqual(r.allocation.operating_hours,{start_hour:10,end_hour:18});
+    }
+    assert.equal(runs[1].allocation.total_devices,50);assert.equal(runs[1].allocation.constraints.water_budget_l,3000);assert.equal(runs[1].allocation.constraints.commute_priority,false);
+    assert.equal(runs[2].allocation.constraints.commute_priority,true);assert.ok(runs[2].allocation.allocation.some(r=>r.change!==0));
+    assert.equal(runs[3].allocation.total_devices,30);assert.equal(runs[3].allocation.constraints.water_budget_l,3000);
+    assert.equal(runs[4].allocation.total_devices,30);assert.equal(runs[4].allocation.constraints.water_budget_l,1500);assert.ok(runs[4].allocation.total_water_l<=1500);assert.equal(runs[4].allocation.constraints.commute_priority,true);
+    assert.ok(searches.every(q=>q===`[conversation:${first.id}]`));assert.equal(records.length,6);assert.equal(records[0].id,'old');
+    const noSave=await run('Keep the current plan.',runs[4].id,false);
+    assert.equal(noSave.events.find(e=>e.type==='memory').memories.length,5);assert.equal(records.length,6,'Remember conditions controls saving, not recall');
+    await assert.rejects(agent.start({question:'New',date,previous_run_id:first.id,fresh_start:true}),/cannot continue/);
+    assert.equal(parsePatch('Water budget: 1,500 litres.').water_budget_l,1500);
+    assert.throws(()=>parsePatch('Water budget: -10 liters.'),/negative/);
+    assert.equal(parsePatch(questions[0]).commute_priority,undefined);
+  }finally{agent.close();fs.rmSync(root,{recursive:true,force:true});}
+});
