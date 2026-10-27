@@ -535,17 +535,18 @@ canvas{display:block;max-width:100%}
 </section>
 
 <aside class="panel panel-right" aria-label="분석 결과">
-  <section class="block agent-panel" aria-label="포그 운영 계획">
-    <h2 class="eyebrow">포그 운영 계획</h2>
-    <p class="hint">분석일 <b id="agent-date">2025-12-19</b> · Sydney 현지 시각</p>
-    <p id="agent-status" role="status">준비 중</p>
-    <button type="button" class="btn btn-sm" id="agent-show-date">분석일 지도 보기</button>
-    <label for="agent-devices">사용할 장비 수 (변경할 때 입력)</label>
-    <input type="number" id="agent-devices" min="0" max="10000" step="1" placeholder="예: 50">
-    <label for="agent-question">어떤 계획이 필요한가요?</label>
-    <textarea id="agent-question" rows="4" maxlength="3000" placeholder="예: 포그 50대를 배치해줘. 물은 하루 3000L, 운영은 10시부터 18시까지야."></textarea>
-    <label><input type="checkbox" id="agent-remember-request" checked> 이 조건을 다음 요청에도 사용</label>
-    <div class="button-pair"><button type="button" class="btn btn-sm" id="agent-run">계획 요청</button><button type="button" class="btn btn-sm" id="agent-refresh">다시 확인</button></div>
+  <section class="block agent-panel" aria-label="Fog operating plan">
+    <h2 class="eyebrow">Fog operating plan</h2>
+    <p class="hint">Analysis date <b id="agent-date">2025-12-19</b> · Sydney local time</p>
+    <p id="agent-status" role="status">Loading</p>
+    <button type="button" class="btn btn-sm" id="agent-show-date">Show analysis date on map</button>
+    <label for="agent-devices">Inventory (enter only to change)</label>
+    <input type="number" id="agent-devices" min="0" max="10000" step="1" placeholder="e.g. 50">
+    <label for="agent-question">What would you like to plan?</label>
+    <textarea id="agent-question" rows="4" maxlength="3000" placeholder="Allocate 50 fog units across those ten sites. Operate 10:00–18:00 with 3000L."></textarea>
+    <label><input type="checkbox" id="agent-remember-request" checked> Remember these conditions</label>
+    <label><input type="checkbox" id="agent-continue" checked> Continue the previous conversation</label><p class="hint" id="agent-context-note"></p>
+    <div class="button-pair"><button type="button" class="btn btn-sm" id="agent-run">Request plan</button><button type="button" class="btn btn-sm" id="agent-refresh">Refresh</button></div>
     <p class="hint" id="agent-conditions"></p>
     <div id="agent-allocation"></div>
     <div class="answer" id="agent-answer" aria-live="polite"></div>

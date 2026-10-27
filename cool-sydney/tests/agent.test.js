@@ -110,7 +110,13 @@ test('graph monitor distinguishes interrupted nodes, unexecuted paths, and runs 
 });
 test('real LangGraph terminates a model that keeps calling tools', {skip:!installed},async()=>{
   const {n}=nodes({model:async()=>({message:{role:'assistant',tool_calls:[call('catalog_details',{table_names:['weather']})]}})});
-  const result=await (await buildGraph(n)).invoke({}, {recursionLimit:80});assert.equal(result.calls,6);assert.match(result.answer,/한도/);
+  const result=await (await buildGraph(n)).invoke({}, {recursionLimit:80});assert.equal(result.calls,4);assert.match(result.answer,/한도/);
+});
+test('identical tool requests reuse results without another database query',async()=>{
+  let queries=0;const {n,events}=nodes({query:async()=>{queries++;return {columns:['passages'],data:[[25]]};}});
+  const state=await n.context();state.messages.push({role:'assistant',tool_calls:[call('execute_readonly_sql',{sql:`SELECT passages FROM ${db}.pedestrian_counts`},'first'),call('execute_readonly_sql',{sql:`SELECT passages FROM ${db}.pedestrian_counts`},'again')]});
+  const result=await n.tools(state);assert.equal(queries,1);assert.equal(events.filter(e=>e.type==='tool_reused').length,1);
+  assert.deepEqual(result.messages.filter(m=>m.role==='tool').map(m=>JSON.parse(m.content).result.data),[[[25]],[[25]]]);
 });
 test('separate SQL and cooling nodes preserve multi-tool ordering and shared weather evidence',{skip:!installed},async()=>{
   let turn=0;const {n,events}=nodes({model:async messages=>{
@@ -148,6 +154,7 @@ test('operator changes inventory while preserving commute priority and water bud
   assert.equal(resolveConstraints('출퇴근 시간을 고려해줘',memories).constraints.devices,50);
   assert.equal(resolveConstraints('출퇴근은 고려하지 마',memories).constraints.commute_priority,false);
   assert.equal(resolveConstraints('포그가 50개 있어',[]).constraints.devices,50);
+  assert.equal(resolveConstraints('전체 보행 조사 지점에서 평일 출퇴근 시간대의 보행량이 많은 구간 10곳을 찾아줘',[]).constraints.commute_priority,false);
   const english=resolveConstraints('Place 50 fog units. Operate 10:00–18:00 with 3000L.',[]);
   assert.equal(english.constraints.devices,50);assert.equal(english.constraints.start_hour,10);assert.equal(english.constraints.end_hour,18);
   assert.equal(resolveConstraints('2025-12-19',[]).constraints.start_hour,undefined);

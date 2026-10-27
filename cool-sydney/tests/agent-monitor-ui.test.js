@@ -28,7 +28,7 @@ test('delivered monitor renders the compiled graph before any API succeeds',asyn
   nodes.find(n=>n.dataset.node==='recall_memory').listeners.click();
   assert.match(ids['agent-graph-detail'].textContent,/Meterless/);
   await new Promise(resolve=>setImmediate(resolve));
-  assert.match(ids['agent-graph-status'].textContent,/실시간 서버 연결을 확인하지 못했습니다/);
+  assert.match(ids['agent-graph-status'].textContent,/Live server connection unavailable/);
   assert.equal(ids['agent-graph'].querySelectorAll('[data-node]').length,nodes.length);
 });
 test('node inspector shows prompt bodies, model turns, and SQL result cells as text',async()=>{
@@ -46,7 +46,7 @@ test('node inspector shows prompt bodies, model turns, and SQL result cells as t
   const sql={seq:5,type:'sql_request',tool_event:4,sql:'SELECT value LIMIT 100'};
   const result={seq:6,type:'tool_result',tool_event:4,result:{sql_event:5,columns:['value'],data:[['<script>untrusted</script>']]}};
   const tools=new Element();context.renderNodeTrace(tools,'tools',[call,sql,result],{events:[call,sql,result]});
-  assert.match(tools.textContent,/SELECT value LIMIT 100/);assert.match(tools.textContent,/実際|실제 반환 1행/);
+  assert.match(tools.textContent,/SELECT value LIMIT 100/);assert.match(tools.textContent,/Returned 1 rows/);
   const walk=el=>[el,...el.children.flatMap(walk)];assert.equal(walk(tools).filter(el=>el.tag==='table').length,1);
   assert.equal(walk(tools).filter(el=>el.tag==='script').length,0);
   assert.equal(walk(tools).find(el=>el.tag==='td').textContent,'<script>untrusted</script>');
@@ -63,10 +63,40 @@ test('clicking separate model and SQL steps isolates their inputs and outputs',(
   const run={id:'r1',status:'running',events};
   const elements=Object.fromEntries(['svg','detail','status','mermaid','postGraph','flow'].map(k=>[k,new Element()]));
   const view=context.createGraphView(elements);view.paint(graph,run);
-  assert.deepEqual(Array.from(context.executionSteps(run),s=>s.title),['메타·기억 준비','모델 1','SQL 조회 1','모델 2']);
+  assert.deepEqual(Array.from(context.executionSteps(run),s=>s.title),['Load context','Model 1','Query SQL 1','Model 2']);
   elements.flow.children[1].listeners.click();
   assert.match(elements.detail.textContent,/FIRST INPUT/);assert.match(elements.detail.textContent,/FIRST OUTPUT/);assert.doesNotMatch(elements.detail.textContent,/SECOND OUTPUT/);
   view.paint(graph,run);assert.match(elements.detail.textContent,/FIRST OUTPUT/,'polling must preserve the manually selected step');
-  elements.flow.children[2].listeners.click();assert.match(elements.detail.textContent,/SELECT temperature/);assert.match(elements.detail.textContent,/실제 반환 1행/);
+  elements.flow.children[2].listeners.click();assert.match(elements.detail.textContent,/SELECT temperature/);assert.match(elements.detail.textContent,/Returned 1 rows/);
   elements.flow.children[3].listeners.click();assert.match(elements.detail.textContent,/temperature = 39/);assert.match(elements.detail.textContent,/SECOND OUTPUT/);
+});
+
+test('monitor continues the selected completed run and can explicitly start a new conversation',async()=>{
+  const src=path.resolve(__dirname,'../src'),html=fs.readFileSync(path.join(src,'agent-monitor.html'),'utf8');
+  const ids=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element()]));
+  ids['agent-continue'].checked=true;ids['agent-remember-request'].checked=true;ids['agent-devices'].value='';
+  const old={id:'12345678-1234-1234-1234-123456789abc',status:'completed',question:'Top ten sites',date:'2025-12-19',events:[],answer:'Previous ranking',candidates:{site_ids:[1,2,3,4,5,6,7,8,9,10]}};
+  const graph={nodes:['__start__','load_catalog','compose_prompt','model','finish','__end__'].map(id=>({id})),edges:[]};
+  const posts=[];let latest=old;
+  const context=vm.createContext({document:{hidden:true,getElementById:id=>ids[id],createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag)},window:{},AbortSignal,clearTimeout,setTimeout,console,
+    fetch:async(url,options)=>{
+      let data;
+      if(options.method==='POST'){posts.push(JSON.parse(options.body));latest={...old,id:'22345678-1234-1234-1234-123456789abc',question:posts.at(-1).question};data={id:latest.id};}
+      else if(url.endsWith('/status'))data={date:old.date,dependency_installed:true,catalog_ready:true,conversation_supported:true,trace_version:4,providers:{gemini:{configured:true}}};
+      else if(url.endsWith('/catalog'))data={};
+      else if(url.endsWith('/graph'))data=graph;
+      else if(url.endsWith('/memories'))data={status:'connected',memories:[],checked_at:new Date().toISOString()};
+      else if(url.endsWith('/runs'))data=[latest];
+      else data=latest;
+      return {ok:true,json:async()=>data};
+    }});
+  vm.runInContext(fs.readFileSync(path.join(src,'agent-monitor.mjs'),'utf8'),context);
+  await new Promise(r=>setTimeout(r,10));
+  assert.equal(ids['agent-run'].disabled,false);assert.match(ids['agent-context-note'].textContent,/10 selected sites/);
+  ids['agent-question'].value='Allocate 50 units';await ids['agent-run'].listeners.click();
+  assert.equal(posts[0].previous_run_id,old.id);
+  await new Promise(r=>setTimeout(r,10));
+  ids['agent-continue'].checked=false;ids['agent-continue'].listeners.change();ids['agent-question'].value='A different plan';
+  await ids['agent-run'].listeners.click();assert.equal(posts[1].previous_run_id,null);
+  await new Promise(r=>setTimeout(r,10));
 });

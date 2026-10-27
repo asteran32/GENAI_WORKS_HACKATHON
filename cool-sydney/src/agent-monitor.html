@@ -1,33 +1,34 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Cool Sydney · Agent Monitor</title><link rel="stylesheet" href="/agent-monitor.css">
 </head>
 <body><main class="monitor-shell">
-  <header class="monitor-heading"><div><p class="eyebrow">COOL SYDNEY / AGENT MONITOR</p><h1>질문부터 답변까지, 한 단계씩.</h1><p class="hint">질문을 보내고 실행 단계를 클릭해 프롬프트·SQL·응답을 확인하세요.</p></div><button id="agent-show-date" type="button">사용자 대시보드 ↗</button></header>
+  <header class="monitor-heading"><div><p class="eyebrow">COOL SYDNEY / AGENT MONITOR</p><h1>From question to answer, step by step.</h1><p class="hint">Send a question, then click a step to inspect prompts, SQL and responses.</p></div><button id="agent-show-date" type="button">Open dashboard ↗</button></header>
   <section class="composer" aria-labelledby="request-heading">
-    <div class="section-top"><h2 id="request-heading">1. 테스트 질문</h2><span class="hint">분석일 <b id="agent-date">2025-12-19</b> · Sydney</span></div>
-    <label class="sr-only" for="agent-question">에이전트에게 보낼 질문</label>
-    <textarea id="agent-question" rows="3" maxlength="3000" placeholder="예: Martin Place 주변의 보행량을 확인해줘."></textarea>
-    <div class="composer-controls"><label for="agent-provider">모델 <select id="agent-provider"><option value="gemini">Gemini</option><option value="nvidia">NVIDIA Nemotron</option></select></label><label for="agent-devices">장비 수 <input id="agent-devices" type="number" min="0" max="10000" step="1" placeholder="변경할 때만"></label><label class="check"><input type="checkbox" id="agent-remember-request" checked> 운영 조건 기억</label><button id="agent-run" class="primary" type="button">질문 보내기 →</button></div>
-    <div class="section-top"><p id="agent-status" class="hint" role="status">연결 확인 중</p><span class="hint">⌘ / Ctrl + Enter</span></div>
+    <div class="section-top"><h2 id="request-heading">1. Ask the agent</h2><span class="hint">Analysis date <b id="agent-date">2025-12-19</b> · Sydney</span></div>
+    <label class="sr-only" for="agent-question">Question for the agent</label>
+    <textarea id="agent-question" rows="3" maxlength="3000" placeholder="Example: Allocate 50 fog units across those ten sites. Operate 10:00–18:00 with 3000L."></textarea>
+    <div class="composer-controls"><label for="agent-provider">Model <select id="agent-provider"><option value="gemini">Gemini</option><option value="nvidia">NVIDIA Nemotron</option></select></label><label for="agent-devices">Inventory <input id="agent-devices" type="number" min="0" max="10000" step="1" placeholder="Only to change"></label><label class="check"><input type="checkbox" id="agent-remember-request" checked> Remember conditions</label><button id="agent-run" class="primary" type="button">Send question →</button></div>
+    <label class="check"><input id="agent-continue" type="checkbox" checked> Continue the selected run</label><p id="agent-context-note" class="hint">Select a completed run below to reuse its sites and operating conditions.</p>
+    <div class="section-top"><p id="agent-status" class="hint" role="status">Checking connection</p><span class="hint">⌘ / Ctrl + Enter</span></div>
   </section>
-  <section class="run-toolbar" aria-label="실행 선택"><label for="agent-history">실행 기록</label><select id="agent-history"><option value="">실행을 선택하세요</option></select><label class="check"><input type="checkbox" id="agent-follow-latest" checked> 최신 실행 따라가기</label><button id="agent-refresh" type="button">새로고침</button></section>
-  <p id="agent-view-question" class="run-question">아직 실행한 질문이 없습니다.</p>
+  <section class="run-toolbar" aria-label="Select a run"><label for="agent-history">Run history</label><select id="agent-history"><option value="">Select a run</option></select><label class="check"><input type="checkbox" id="agent-follow-latest" checked> Follow latest run</label><button id="agent-refresh" type="button">Refresh</button></section>
+  <p id="agent-view-question" class="run-question">No question submitted yet.</p>
   <p id="agent-trace-notice" class="trace-notice" role="status" hidden></p>
   <details class="graph-card" open>
-    <summary>LangGraph 구조 <span class="hint">노드를 누르면 해당 종류의 호출 전체를 확인합니다.</span></summary>
-    <p id="agent-graph-status" class="hint" role="status">그래프를 불러오는 중입니다.</p>
-    <div class="graph-canvas"><svg id="agent-graph" viewBox="0 0 1060 440" role="group" aria-label="LangGraph 구조와 실행 경로"></svg></div>
-    <p class="graph-legend">● 파랑: 실행 중　● 초록: 완료　● 빨강: 오류　점선: 조건 분기</p>
+    <summary>LangGraph structure <span class="hint">Click a node to inspect all calls of that type.</span></summary>
+    <p id="agent-graph-status" class="hint" role="status">Loading graph.</p>
+    <div class="graph-canvas"><svg id="agent-graph" viewBox="0 0 1060 440" role="group" aria-label="LangGraph structure and execution path"></svg></div>
+    <p class="graph-legend">● Blue: running　● Green: complete　● Red: error　Dashed: conditional branch</p>
     <p id="agent-graph-post" class="hint"></p>
   </details>
-  <section class="debug-workspace" aria-label="실행 단계 디버깅">
-    <aside class="execution-panel"><h2>2. 실행 순서</h2><p class="hint">각 호출을 누르면 오른쪽에 상세 내용이 열립니다.</p><div id="agent-execution-steps" aria-label="실행별 단계"></div></aside>
-    <section class="inspection-panel"><div class="section-top"><h2>3. 입력과 응답</h2><span class="hint">선택한 호출의 실제 기록</span></div><div id="agent-graph-detail" aria-live="polite"></div></section>
+  <section class="debug-workspace" aria-label="Execution debugger">
+    <aside class="execution-panel"><h2>2. Execution timeline</h2><p class="hint">Click a call to inspect it on the right.</p><div id="agent-execution-steps" aria-label="Steps in this run"></div></aside>
+    <section class="inspection-panel"><div class="section-top"><h2>3. Inputs and outputs</h2><span class="hint">Recorded data for the selected call</span></div><div id="agent-graph-detail" aria-live="polite"></div></section>
   </section>
-  <section class="answer-card"><h2>최종 답변</h2><p id="agent-conditions" class="hint"></p><div id="agent-allocation"></div><div class="answer" id="agent-answer" aria-live="polite">질문을 보내면 답변이 여기에 표시됩니다.</div><p id="agent-memory-status" class="hint"></p></section>
-  <details class="support-panel"><summary>Meterless 기억 · 이전 조건 비교</summary><p id="agent-memory-connection" role="status">연결 확인 중</p><div class="memory-columns"><section><h3>이번 요청에서 읽은 기억</h3><p id="agent-recall-status" class="hint"></p><div id="agent-recalled-memories"></div><div id="agent-condition-changes"></div></section><section><h3>현재 저장된 기억</h3><div id="agent-stored-memories"></div></section></div><label for="agent-memory">다음 요청에 남길 운영 피드백</label><textarea id="agent-memory" rows="2" maxlength="3000" placeholder="예: 출퇴근 시간대를 우선해줘."></textarea><button id="agent-remember" type="button" disabled>피드백 기억</button></details>
-  <details class="support-panel"><summary>원본 로그 · 카탈로그 · 그래프 정의</summary><p id="agent-run-id" class="hint"></p><details><summary>단계별 상태</summary><ol id="agent-workflow" class="agent-workflow"></ol></details><details><summary>전체 이벤트</summary><ol id="agent-trace"></ol></details><details><summary>메타 카탈로그</summary><pre id="agent-catalog"></pre></details><details><summary>LangGraph Mermaid</summary><pre id="agent-graph-mermaid"></pre></details></details>
+  <section class="answer-card"><h2>Final answer</h2><p id="agent-conditions" class="hint"></p><div id="agent-allocation"></div><div class="answer" id="agent-answer" aria-live="polite">Your answer will appear here.</div><p id="agent-memory-status" class="hint"></p></section>
+  <details class="support-panel"><summary>Meterless memory · Compare conditions</summary><p id="agent-memory-connection" role="status">Checking connection</p><div class="memory-columns"><section><h3>Memory read by this run</h3><p id="agent-recall-status" class="hint"></p><div id="agent-recalled-memories"></div><div id="agent-condition-changes"></div></section><section><h3>Memory stored now</h3><div id="agent-stored-memories"></div></section></div><label for="agent-memory">Operating feedback for future requests</label><textarea id="agent-memory" rows="2" maxlength="3000" placeholder="Example: Prioritize commute hours."></textarea><button id="agent-remember" type="button" disabled>Save feedback</button></details>
+  <details class="support-panel"><summary>Raw logs · Catalog · Graph definition</summary><p id="agent-run-id" class="hint"></p><details><summary>Step status</summary><ol id="agent-workflow" class="agent-workflow"></ol></details><details><summary>All events</summary><ol id="agent-trace"></ol></details><details><summary>Metadata catalog</summary><pre id="agent-catalog"></pre></details><details><summary>LangGraph Mermaid</summary><pre id="agent-graph-mermaid"></pre></details></details>
 </main><script type="module" src="/agent-monitor.mjs"></script></body></html>
