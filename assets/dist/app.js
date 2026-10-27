@@ -10,6 +10,7 @@ import { clamp, ambientTemperature, streetTemperature, footfallAtHour, coolingRa
 import { createCameraTween, advanceCameraTween } from './camera.js';
 import { UI, number, decimal, applyStrings } from './i18n.js';
 import { DEFAULT_DATE, validScenarioDate, formatHour, formatScenarioDate, solarAt, naturalComparisonHour } from './scenario-time.js';
+import {subscribeFogPlan} from './fog-plan.js';
 
 applyStrings();
 document.querySelectorAll('.retry-button').forEach(button => button.addEventListener('click', () => location.reload()));
@@ -17,6 +18,7 @@ const $ = (id) => document.getElementById(id);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const mobile = () => innerWidth <= 700;
 const state = { date: DEFAULT_DATE, hour: 15, trees: true, shadows: true, cloudy: false, playing: false, top: false, selected: 'townhall', installed: new Set(['townhall']), power: 65, after: true, heat: true, people: true };
+let activeFogPlan=null,sampleInstalled=null;
 const host = $('scene');
 let renderer;
 try {
@@ -233,7 +235,7 @@ for(const s of sites){
   const button=document.createElement('button');button.className='station-label';button.id='map-focus-'+s.id;button.title=UI.focus(s.name);button.addEventListener('click',()=>selectSite(s.id));marker.append(button);
   const stem=document.createElement('span');stem.className='label-stem';marker.append(stem);$('labels').append(marker);
   labels.push({el:marker,position:v3(s.x,7,s.z),type:'station'});
-  const row=document.createElement('button');row.className='candidate-row';row.id='candidate-'+s.id;row.title=UI.focus(s.name);row.setAttribute('aria-label',UI.candidate(s.name));row.addEventListener('click',()=>selectSite(s.id));$('candidate-list').append(row);
+  const row=document.createElement('button');row.className='candidate-row';row.id='candidate-'+s.id;row.title=UI.focus(s.name);row.setAttribute('aria-label',UI.candidate(s.name));row.addEventListener('click',()=>selectSite(s.id));
   const positions=geography.heatPoints.filter(p=>Math.hypot(p.x-s.x,p.z-s.z)<14);
   const people=buildPedestrianCrowd(s,{random:rnd,material:mat,positions,sizeScale:.13,metersPerUnit:CITY.metersPerUnit,isWalkable:point=>!geography.isBuilding(point)&&!geography.isWater(point)});peopleGroup.add(people);
   stationViews.set(s.id,{group,halo,ring,hardware,particles,coords,seeds,marker,button,row,people});
@@ -308,7 +310,9 @@ function selectSite(id){
 }
 function focusPlace(id){
   state.focusedPlace=id;
-  const [ox,oz]=project(OPERA.coordinates),place=id==='opera'?{x:ox,z:oz,name:OPERA.name}:sites.find(s=>s.id===id);
+  const allocation=activeFogPlan?.allocations.find(row=>'plan:'+row.allocation_id===id);
+  const point=allocation?.position?project([allocation.position.longitude,allocation.position.latitude]):null;
+  const [ox,oz]=project(OPERA.coordinates),place=point?{x:point[0],z:point[1],name:allocation.location}:id==='opera'?{x:ox,z:oz,name:OPERA.name}:sites.find(s=>s.id===id);
   if(!place)return;
   controls.enableDamping=false;controls.update();controls.enableDamping=true;
   const target=v3(place.x,id==='opera'?6:2,place.z);
@@ -462,8 +466,9 @@ renderer.domElement.addEventListener('pointerup',event=>{
   if(Math.hypot(event.clientX-start.x,event.clientY-start.y)>5||performance.now()-start.time>450)return;
   const rect=renderer.domElement.getBoundingClientRect();pickRay.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);
   if(!pickRay.ray.intersectPlane(groundPlane,pickedPoint))return;
-  const [x,z]=project(OPERA.coordinates),places=[...sites,{id:'opera',x,z}],nearest=places.map(p=>({...p,d:Math.hypot(p.x-pickedPoint.x,p.z-pickedPoint.z)})).sort((a,b)=>a.d-b.d)[0];
-  if(nearest.d<(nearest.id==='opera'?25:18)){if(nearest.id==='opera')focusPlace('opera');else selectSite(nearest.id);}
+  const proposals=activeFogPlan?.allocations.filter(row=>row.position&&row.units).map(row=>{const [x,z]=project([row.position.longitude,row.position.latitude]);return{id:'plan:'+row.allocation_id,x,z};});
+  const [x,z]=project(OPERA.coordinates),places=[...(proposals||sites),{id:'opera',x,z}],nearest=places.map(p=>({...p,d:Math.hypot(p.x-pickedPoint.x,p.z-pickedPoint.z)})).sort((a,b)=>a.d-b.d)[0];
+  if(nearest.d<(nearest.id==='opera'?25:18)){if(nearest.id.startsWith('plan:'))selectAllocation(nearest.id.slice(5));else if(nearest.id==='opera')focusPlace('opera');else selectSite(nearest.id);}
 });
 $('scenario-date').addEventListener('change',event=>{
   if(!validScenarioDate(event.target.value)||!event.target.checkValidity()){event.target.value=state.date;return;}
@@ -500,6 +505,7 @@ function animate(now){
   const occupiedLabels=[];
   const orderedLabels=[...labels].sort((a,b)=>Number(b.el.classList.contains('selected'))-Number(a.el.classList.contains('selected')));
   for(const l of orderedLabels){
+    if(l.planHidden){l.el.style.display='none';if(l.leader)l.leader.style.display='none';continue;}
     projected.copy(l.position).project(camera);
     let x=(projected.x*.5+.5)*w,y=(-projected.y*.5+.5)*h;
     let hidden=projected.z>1||x<20||x>w-20||y<10||y>h-20||(mobile()&&l.type!=='station'&&!l.el.classList.contains('focusable'));
@@ -532,6 +538,33 @@ function animate(now){
   if(first){first=false;$('loading').classList.add('done');setTimeout(()=>$('loading').remove(),700);if(!reducedMotion)moveCamera(cameraHome,controls.target.clone(),mobile()?.8:1.23,1600);}
 }
 requestAnimationFrame(animate);
+
+// One reference marker per surveyed segment; quantities are never treated as
+// colocated hardware or multiplied into the illustrative cooling model.
+const proposalGroup=new THREE.Group();scene.add(proposalGroup);
+const proposalGeometry=new THREE.RingGeometry(1.5,2.1,24),proposalMaterial=new THREE.MeshBasicMaterial({color:'#168b7b',side:THREE.DoubleSide});
+function selectAllocation(id){[...document.querySelectorAll('[data-allocation-id]')].find(button=>button.dataset.allocationId===id)?.click();}
+document.addEventListener('mist-plan-focus',event=>focusPlace('plan:'+event.detail.allocation_id));
+subscribeFogPlan(plan=>{
+  if(plan?.plan_id===activeFogPlan?.plan_id)return;
+  if(plan&&!activeFogPlan)sampleInstalled=new Set(state.installed);
+  activeFogPlan=plan;
+  state.installed=plan?new Set():sampleInstalled||state.installed;
+  proposalGroup.clear();
+  for(let i=labels.length-1;i>=0;i--)if(labels[i].planMarker){labels[i].el.remove();labels[i].leader?.remove();labels.splice(i,1);}
+  for(const entry of labels)if(entry.type==='station')entry.planHidden=!!plan;
+  for(const row of plan?.allocations||[]){
+    if(!row.position||!row.units)continue;
+    const [x,z]=project([row.position.longitude,row.position.latitude]);
+    const marker=new THREE.Mesh(proposalGeometry,proposalMaterial);marker.rotation.x=-Math.PI/2;marker.position.set(x,1.95,z);proposalGroup.add(marker);
+    const el=document.createElement('div');el.className='map-label station proposal-marker';
+    const button=document.createElement('button');button.className='station-label';button.textContent=`${row.location} · ${row.units} units`;button.title=`Site ${row.site_id}: survey reference location`;
+    button.addEventListener('click',()=>selectAllocation(row.allocation_id));el.append(button);$('labels').append(el);
+    labels.push({el,position:v3(x,5,z),type:'station',planMarker:true});
+  }
+  if(plan&&validScenarioDate(plan.analysis_date)){state.date=plan.analysis_date;$('scenario-date').value=state.date;solarCache.clear();}
+  state.focusedPlace=null;updateSun(true);resize();
+});
 
 // Read-only diagnostic surface for this local demonstration.
 window.mistDemo={getState:()=>({map:{mode:mapSource.mode,buildingParts:geography.buildingParts,heatSegments:heatPoints.length,source:mapSource.data.metadata.tileTemplate,treeCount:geography.treeCount},...state,installed:[...state.installed],sites:siteResults.map(s=>({id:s.id,coordinates:unproject([s.x,s.z]),before:s.before,after:s.after,score:s.score,shade:s.shade.label,natural:s.natural,footfall:s.footfall,valid:!geography.isBuilding([s.x,s.z])&&!geography.isWater([s.x,s.z])})),camera:{type:camera.type,position:camera.position.toArray(),target:controls.target.toArray(),zoom:camera.zoom,moving:!!cameraTween},stations:[...stationViews].map(([id,v])=>({id,mist:v.particles.visible,hardware:v.hardware.visible})),pedestrians:[...stationViews].map(([id,view])=>({id,...view.people.userData.getMotionState()})),screenPoints:[...sites,{id:'opera',x:project(OPERA.coordinates)[0],z:project(OPERA.coordinates)[1]}].map(place=>{const p=v3(place.x,1.8,place.z).project(camera),rect=host.getBoundingClientRect();return{id:place.id,x:rect.left+(p.x*.5+.5)*rect.width,y:rect.top+(-p.y*.5+.5)*rect.height};}),renderer:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}})};

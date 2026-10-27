@@ -72,17 +72,17 @@ async function api(url,body) {
 async function refresh() {
   const s=await api('/api/agent/status');replayMode=s.replay_mode===true;freshSupported=s.fresh_start_supported===true;date=s.date||date;$('agent-date').textContent=date;
   $('agent-new-scenario').disabled=polling||replayMode||!freshSupported;
-  $('agent-new-scenario').title=!freshSupported?'Restart the server on port 8765 to enable separate scenario memories.':'';
+  $('agent-new-scenario').title=!freshSupported?'Restart the server on port 8766 to enable separate scenario memories.':'';
   const selected=s.providers?.[$('agent-provider').value];
   $('agent-trace-notice').hidden=replayMode||s.trace_version>=6;
-  $('agent-trace-notice').textContent=replayMode||s.trace_version>=6?'':'Restart the server on port 8765 to enable new scenarios with separate memories and English conditions.';
+  $('agent-trace-notice').textContent=replayMode||s.trace_version>=6?'':'Restart the server on port 8766 to enable new scenarios with separate memories and English conditions.';
   const blockers=[];
   if(replayMode){blockers.push(`Recorded demo · ${s.snapshot?.runs?.length||0} runs · read-only. Select a run to inspect its prompts, SQL and results.`);$('agent-follow-latest').checked=false;$('agent-run').textContent='Recorded demo';$('agent-show-date').disabled=true;}
   if(!replayMode){
   if(polling)blockers.push('The previous request is still running.');
-  if(!s.conversation_supported)blockers.push('Restart the server on port 8765 to enable follow-up conversations.');
+  if(!s.conversation_supported)blockers.push('Restart the server on port 8766 to enable follow-up conversations.');
   if(!s.dependency_installed)blockers.push('LangGraph is not installed.');
-  if(!selected?.configured)blockers.push(`${$('agent-provider').value==='gemini'?'Gemini':'NVIDIA'} API key is not loaded. Configure .env and restart the server on port 8765.`);
+  if(!selected?.configured)blockers.push(`${$('agent-provider').value==='gemini'?'Gemini':'NVIDIA'} API key is not loaded. Configure .env and restart the server on port 8766.`);
   if(!s.catalog_ready)blockers.push(`Could not read data catalog: ${s.catalog_error}`);
   }
   $('agent-status').textContent=replayMode?blockers[0]:blockers.length?'Cannot send: '+blockers.join(' '):'Ready · Enter a question and click Send.';
@@ -157,7 +157,7 @@ $('agent-remember').addEventListener('click',async()=>{
 paintWorkflow(null);
 refresh().then(()=>scheduleMonitor(0)).catch(error=>{$('agent-status').textContent=`${error.message} Restart the server and click Refresh.`;$('agent-graph-status').textContent='Showing the bundled graph. Live server connection unavailable.';});
 
-$('agent-show-date').addEventListener('click',()=>window.open('http://127.0.0.1:8765/','_blank','noopener'));
+$('agent-show-date').addEventListener('click',()=>window.open('http://127.0.0.1:4173/','_blank','noopener'));
 let monitorBusy=false,monitorTimer=null,monitorFailures=0;
 function scheduleMonitor(delay){clearTimeout(monitorTimer);monitorTimer=setTimeout(monitorTick,delay);}
 async function monitorTick(){

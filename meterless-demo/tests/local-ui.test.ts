@@ -101,20 +101,24 @@ test("only allowlisted UI assets are served; persisted markup stays data", async
   assert.equal((await request("/api/memories")).headers.get("Content-Type"), "application/json; charset=utf-8");
 });
 
-test('monitor proxies dashboard runs with same-origin protection and a fixed upstream',async t=>{
+test('8766 handles frontend and monitor routes with the same in-process agent',async t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'monitor-test-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const calls:any[]=[];
-  const app=await createApp({persistDir:dir,agentTransport:async(url,options)=>{
-    calls.push({url,options});return new Response(JSON.stringify([{id:'run-from-dashboard',status:'running'}]),{headers:{'Content-Type':'application/json'}});
-  }});
+  const id='12345678-1234-1234-1234-123456789abc';
+  const agent={list:()=>[{id,status:'completed'}],status:()=>({framework:'LangGraph'}),get:(runId:string)=>({id:runId,status:'completed'}),start:async(body:any)=>{calls.push(body);return {id};},close:()=>{calls.push('closed');}};
+  const app=await createApp({persistDir:dir,agent});
   const runs=await app(new Request(base+'/api/cool-sydney/runs'));
-  assert.equal(runs.status,200);assert.equal((await runs.json())[0].id,'run-from-dashboard');
-  assert.equal(calls[0].url,'http://127.0.0.1:8765/api/agent/runs');
-  const foreign=await app(new Request(base+'/api/cool-sydney/runs',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:'{}'}));
+  assert.equal(runs.status,200);assert.equal((await runs.json())[0].id,id);
+  const direct=await app(new Request(base+'/api/agent/runs/'+id));assert.equal((await direct.json()).id,id);
+  const payload={question:'Find the busiest segments',date:'2025-12-19',fresh_start:true,remember_request:true};
+  const started=await app(new Request(base+'/api/agent/runs',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify(payload)}));
+  assert.equal(started.status,202);assert.deepEqual(calls[0],payload);
+  const foreign=await app(new Request(base+'/api/cool-sydney/runs',{method:'POST',headers:{Origin:'https://evil.example','Content-Type':'application/json'},body:'{}'}));
   assert.equal(foreign.status,403);assert.equal(calls.length,1);
-  assert.equal((await app(new Request(base+'/api/cool-sydney/anything-else'))).status,404);assert.equal(calls.length,1);
-  const home=await app(new Request(base+'/'));assert.match(await home.text(),/id="monitor-frame"/);
+  assert.equal((await app(new Request(base+'/api/cool-sydney/anything-else'))).status,404);
   const monitor=await app(new Request(base+'/agent-monitor'));assert.equal(monitor.status,200);assert.match(monitor.headers.get('Content-Security-Policy')!,/frame-ancestors 'self'/);
   assert.match(await monitor.text(),/agent-workflow/);
+  const status=await app(new Request(base+'/api/agent/status'));assert.equal((await status.json()).server_port,8766);
+  app.close();assert.equal(calls.at(-1),'closed');
 });

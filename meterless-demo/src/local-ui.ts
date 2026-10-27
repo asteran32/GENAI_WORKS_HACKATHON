@@ -75,11 +75,10 @@ async function readBody(request: Request) {
   } catch { throw new HttpError(400, "올바른 JSON 객체가 필요합니다."); }
 }
 
-export async function createApp(options: { persistDir: string; onError?: (error: unknown) => void; agentTransport?: typeof fetch }) {
-  const monitor = createAgentMonitor({transport:options.agentTransport});
-  const { HMEM } = await loadHMEM();
-  const { embed } = await import("../vendor/hmem/src/embeddings.ts");
-  return async function handle(request: Request): Promise<Response> {
+export async function createApp(options: { persistDir: string; onError?: (error: unknown) => void; agent?: any; projectRoot?: string }) {
+  const monitor = createAgentMonitor({agent:options.agent,projectRoot:options.projectRoot,memoryTransport:async(url,init)=>handle(new Request(url,init))});
+  const { HMEM, embed } = await loadHMEM();
+  async function handle(request: Request): Promise<Response> {
     try {
       const url = new URL(request.url);
       if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) throw new HttpError(403, "로컬 주소로 접속하세요.");
@@ -88,7 +87,7 @@ export async function createApp(options: { persistDir: string; onError?: (error:
         throw new HttpError(403, "같은 로컬 화면의 요청만 허용합니다.");
       }
       const route = url.pathname;
-      if(['/agent-monitor','/agent-monitor.mjs','/agent-graph.mjs','/agent-monitor.css'].includes(route)||route.startsWith('/api/cool-sydney/')) {
+      if(['/agent-monitor','/agent-monitor.mjs','/agent-graph.mjs','/agent-monitor.css'].includes(route)||route.startsWith('/api/cool-sydney/')||route.startsWith('/api/agent/')) {
         const body=request.method==='POST'?await readBody(request):undefined;
         return monitor(request,body);
       }
@@ -166,5 +165,6 @@ export async function createApp(options: { persistDir: string; onError?: (error:
       options.onError?.(error);
       return json({ error: "기억을 읽거나 저장하지 못했습니다. 터미널 로그를 확인하세요." }, 500);
     }
-  };
+  }
+  return Object.assign(handle,{close:()=>monitor.close()});
 }

@@ -75,6 +75,7 @@ test('HTTP boundary serves only public assets, rejects foreign origins/hosts and
   const page = await request('/'); assert.equal(page.status, 200); assert.match(page.body, /COOLSYDNEY|COOL<span/);
   require('../build').build();
   const deck = await request('/deck'); assert.equal(deck.status, 200); assert.match(deck.body, /submission deck/i);
+  const planView = await request('/agent-plan-view.mjs'); assert.equal(planView.status,200); assert.match(planView.headers['Content-Type'],/javascript/); assert.match(planView.body,/export function planMarkers/);
   const status = await request('/api/status'); assert.equal(status.status, 200); assert.equal(JSON.parse(status.body).app, 'cool-sydney');
   assert.equal((await request('/.env')).status, 404);
   assert.equal((await request('/api/status', { headers: { host: 'evil.example:8765' } })).status, 403);

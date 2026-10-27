@@ -128,3 +128,21 @@ test('dashboard consumes exported JSON and broadcasts a map update without calli
   assert.equal(ids['agent-plan-json'].href,'/api/agent/runs/p1/plan');assert.ok(calls.every(c=>c.method==='GET'));
   await context.loadLatestPlan();assert.equal(events.length,1,'repeated polling must not reset map state');
 });
+
+test('rebuilt monitor and dashboard render calculated totals without missing helper modules',async()=>{
+  const build=require('../build');build.build();await build.buildMonitor();
+  const allocation={constraints:{devices:5,water_budget_l:60,commute_priority:false},operating_hours:{start_hour:10,end_hour:11},
+    allocation:[{id:'b',site_id:2,name:'Second street',devices:2,demand_score:400,change:null},{id:'a',site_id:1,name:'First street',devices:3,demand_score:600,change:null}],
+    schedule:[{hour:10,active_minutes:60,water_l:60}],total_devices:5,total_water_l:60};
+  for(const [htmlFile,scriptFile]of [['src/agent-monitor.html','src/agent-monitor.mjs'],['public/index.html','public/agent-panel.mjs']]){
+    const html=fs.readFileSync(path.resolve(__dirname,'..',htmlFile),'utf8');
+    const ids=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element()]));
+    const context=vm.createContext({document:{hidden:true,getElementById:id=>ids[id],createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),addEventListener:()=>{}},
+      window:{},AbortSignal,clearTimeout:()=>{},setTimeout:()=>0,fetch:async()=>{throw new Error('offline');},console});
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname,'..',scriptFile),'utf8'),context);
+    await new Promise(resolve=>setImmediate(resolve));
+    context.paint({id:'calculated',status:'completed',date:'2025-12-19',question:'Allocate units',events:[],answer:'INCORRECT MODEL TOTAL',allocation,response_language:'en'});
+    assert.match(ids['agent-answer'].textContent,/1,000 passages/);assert.doesNotMatch(ids['agent-answer'].textContent,/INCORRECT/);
+    assert.match(ids['agent-allocation'].textContent,/First street.*Second street/s);
+  }
+});

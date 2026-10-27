@@ -33,7 +33,7 @@ try{
   const morning=await get(page);
   check('Time-dependent crowd counts update while retaining safe motion',walkers(morning).length!==first.length&&walkers(morning).every(p=>p.valid&&p.moving));
   await page.locator('#time-slider').evaluate(el=>{el.value='15';el.dispatchEvent(new Event('input',{bubbles:true}));});
-  await page.locator('#candidate-townhall').click();await page.waitForFunction(()=>!window.mistDemo.getState().camera.moving);
+  await page.locator('#map-focus-townhall').click();await page.waitForFunction(()=>!window.mistDemo.getState().camera.moving);
   for(let i=0;i<4;i++)await page.locator('#zoom-in').click();
   await page.mouse.move(1100,600);for(let i=0;i<32;i++){await page.mouse.wheel(0,-100);await page.waitForTimeout(40);}
   await page.locator('#toggle-heat').click();await page.waitForTimeout(500);

@@ -6,9 +6,9 @@
 
 영어 대화 5단계(상위 10곳 조회 → 50대 배치 → 출퇴근 우선 → 30대로 축소 → 물 1,500L로 축소)가 포함되어 있습니다. Run history에서 **Across all pedestrian survey sites…**부터 순서대로 확인할 수 있습니다.
 
-## 로컬 웹 UI
+## 통합 에이전트·기억·모니터링 서버
 
-기억 목록, 조건 저장·수정, 검색, 기억별·전체 변경 이력을 브라우저에서 확인할 수 있습니다. 공식 H-MEM 참조 엔진을 호출하며 CLI와 같은 `.notebook/` 데이터를 사용합니다. Node.js 22.19 이상을 사용하세요. 최초에는 저장소 루트에서 `npm --prefix meterless-demo ci`와 `npm --prefix meterless-demo run setup`으로 엔진을 준비합니다. 엔진이 준비되면 기본 실행에는 API 키가 필요하지 않습니다.
+기억 목록, 조건 저장·수정, 검색, 기억별·전체 변경 이력을 브라우저에서 확인할 수 있습니다. 공식 H-MEM 참조 엔진을 호출하며 CLI와 같은 `.notebook/` 데이터를 사용합니다. Node.js 22.19 이상을 사용하세요. 최초에는 저장소 루트에서 `npm --prefix meterless-demo ci`와 `npm --prefix meterless-demo run setup`으로 엔진을 준비합니다. 엔진이 준비되면 기억 기능에는 API 키가 필요하지 않습니다. 실시간 에이전트 질문은 저장소 `.env`의 Gemini/NVIDIA 설정을 사용합니다. 이 서버 하나가 에이전트 실행, 기억, 모니터링을 처리합니다. 4173 사용자 UI는 `/api/agent/*`로 요청하며 모니터도 같은 실행을 조회합니다. 8765 서버는 필요하지 않습니다.
 
 ```bash
 COOL_SYDNEY_PROJECT_ROOT="$PWD" npm --prefix meterless-demo start

@@ -17,12 +17,14 @@
 
 | 화면 | 주소 | 용도 |
 | --- | --- | --- |
-| Cool Sydney | http://127.0.0.1:8765/ | 3D 지도, 포그 비교, 에이전트 요청 |
-| H-MEM 로컬 UI | http://127.0.0.1:8766/ | 기억 목록·조건 저장/수정·검색·이력 |
+| Mist 사용자 화면 | http://127.0.0.1:4173/ | 채팅 요청·응답, JSON 기반 Candidate locations와 Fog units |
+| 통합 백엔드·모니터 | http://127.0.0.1:8766/ | 에이전트 실행, 기억 저장·검색, 실행 모니터 |
 | Agent Monitor | http://127.0.0.1:8766/agent-monitor | 실행별 그래프·타임라인·입출력 검사 |
 | Zetaris | http://localhost:3000/ | 별도로 설치한 데이터 플랫폼의 SQL 화면 |
 
-`meterless-demo/`는 이 저장소에 포함한 H-MEM 참조 구현용 HTTP/UI 어댑터입니다. Meterless Nightshift 웹 제품과 별개이며, Chat Import 없이 사용할 수 있습니다. Agent Monitor는 8765의 에이전트 API를 로컬 프록시로 읽습니다.
+`meterless-demo/`는 이 저장소에 포함한 H-MEM 참조 구현용 HTTP/UI 어댑터입니다. Meterless Nightshift 웹 제품과 별개이며, Chat Import 없이 사용할 수 있습니다. 8766 서버가 기존 LangGraph 에이전트를 직접 실행합니다. Agent Monitor와 4173 채팅은 같은 실행 기록을 사용합니다.
+
+새 Mist UI는 저장소 루트에서 `npm --prefix assets start`로 실행합니다. 기존 4173 Python 정적 서버는 먼저 종료하세요. 같은 `assets/dist` 화면을 제공하는 Node 서버가 채팅 요청을 8766의 기존 에이전트 API로 전달합니다. 별도 터미널에서 `npm --prefix meterless-demo start`를 실행하세요. 4173과 8766만 사용하며 기존 8765 서버는 종료합니다. Ask Mist의 새로고침 아이콘은 새 시나리오를 시작하며, 완료된 배치 JSON이 왼쪽 Candidate locations에 대수 내림차순으로 반영됩니다.
 
 ## 팀원용 실행 기록 데모 — API 키 없이 보기
 
@@ -44,7 +46,7 @@ node scripts/run_agent_monitor_demo.js
 
 ## 시작하기
 
-Agent Monitor에서 영어 시나리오를 처음부터 시험하려면 8765 서버를 재시작하고 화면을 새로고침한 뒤 **Start new scenario**를 누르세요. 이전 기록은 보존하고 해당 시나리오의 Meterless 기억만 조회합니다. **Remember conditions**는 켜두면 이번 시나리오의 조건을 저장하며, 첫 요청 이후 **Continue the selected run**이 자동으로 켜집니다. 후속 질문은 직전 완료된 실행에 이어 보내세요. 단순히 Continue 체크만 해제하면 기존 지역 기억은 계속 조회됩니다. 영어 질문에는 영어로 결과를 표시합니다.
+Agent Monitor에서 영어 시나리오를 처음부터 시험하려면 8766 서버를 재시작하고 화면을 새로고침한 뒤 **Start new scenario**를 누르세요. 이전 기록은 보존하고 해당 시나리오의 Meterless 기억만 조회합니다. **Remember conditions**는 켜두면 이번 시나리오의 조건을 저장하며, 첫 요청 이후 **Continue the selected run**이 자동으로 켜집니다. 후속 질문은 직전 완료된 실행에 이어 보내세요. 단순히 Continue 체크만 해제하면 기존 지역 기억은 계속 조회됩니다. 영어 질문에는 영어로 결과를 표시합니다.
 
 아래 명령은 **이 README가 있는 Git 저장소 루트**에서 실행합니다. 현재 작업 공간에서는 `/Users/suyeongkim/cs/openAgent/.publish/GENAI_WORKS_HACKATHON`입니다. 바깥 `openAgent/cool-sydney`에는 이전 코드가 있으므로 실행 위치를 구분하세요.
 
@@ -84,14 +86,16 @@ npm --prefix cool-sydney ci
 bash scripts/run_dashboard.sh --date 2025-12-19
 ```
 
-스크립트가 Python 환경을 확인하고 GIS·해당 날짜의 CBD 자료를 수집/검증한 뒤 웹서버를 시작합니다. 완료 후 http://127.0.0.1:8765/ 를 엽니다. 처음에는 원본 다운로드와 Parquet 생성에 시간이 걸립니다. 재실행 시 저장한 캐시와 검증된 묶음을 재사용합니다.
+스크립트가 Python 환경을 확인하고 GIS·해당 날짜의 CBD 자료를 수집/검증한 뒤 웹서버를 시작합니다. 이 스크립트는 이전 8765 대시보드도 실행하므로 데이터 준비 후 종료하세요. 현재 화면은 `npm --prefix assets start`로 4173에서 엽니다. 처음에는 원본 다운로드와 Parquet 생성에 시간이 걸립니다. 재실행 시 저장한 캐시와 검증된 묶음을 재사용합니다.
 
 날짜를 생략하면 기본 수집일은 `2025-01-15`입니다. `--map-only`는 CBD 자료 준비를 생략합니다. 에이전트의 분석일은 **활성 카탈로그에 고정**되므로 지도에서 날짜만 바꾼다고 에이전트 근거 날짜가 바뀌지는 않습니다.
 
 이미 자료가 준비됐다면 아래 명령으로 서버만 시작할 수 있습니다.
 
 ```bash
-node cool-sydney/server.js
+npm --prefix meterless-demo start
+# 별도 터미널에서 실행
+npm --prefix assets start
 ```
 
 거리 기온 실측은 별도 선택 자료입니다. 원본 CSV를 준비한 후 `npm --prefix cool-sydney run import:microclimate`로 가져옵니다. [지도·데이터 상세 안내](cool-sydney/README.md)를 참고하세요.
@@ -129,7 +133,7 @@ npm --prefix meterless-demo run setup
 COOL_SYDNEY_PROJECT_ROOT="$PWD" npm --prefix meterless-demo start
 ```
 
-환경 변수는 Agent Monitor가 **현재 저장소의** 화면 파일을 읽도록 지정합니다. 기본 프록시 대상은 `http://127.0.0.1:8765`입니다. 기억 UI만 쓰려면 Cool Sydney 서버 없이도 사용할 수 있습니다.
+환경 변수는 Agent Monitor가 **현재 저장소의** 화면 파일을 읽도록 지정합니다. 에이전트는 이 8766 프로세스에서 직접 실행되며 별도 8765 프로세스는 사용하지 않습니다.
 
 H-MEM 엔진과 기본 UI에는 모델 API 키가 필요하지 않습니다. 상태는 해당 서비스 디렉터리의 `.notebook/`에 저장됩니다. 기존 바깥 `openAgent/meterless-demo`에서 실행하던 기억도 그 디렉터리에 남아 있으며, Git clone으로 이전되지 않습니다.
 
