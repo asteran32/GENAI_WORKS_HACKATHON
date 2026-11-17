@@ -152,7 +152,7 @@ After registering the data and configuring the model, submit requests through th
 
 Follow-up requests retain the conversation's verified site IDs, survey period and conditions, changing only the conditions explicitly specified. Enabling `remember_request` or saving feedback also records conditions and their sources in H-MEM. Previous runs are linked through `previous_run_id` and recovered from disk, keeping conversation history separate from memory service availability.
 
-Periodic survey allocations use each site's hourly counts from the same survey period. If there are fewer units than candidate sites, there is no guarantee that every site will receive a unit. Commuting-hour weights apply to 08:00–10:00 and 17:00–19:00 within the configured operating hours. Changing the weights does not automatically extend operating hours.
+Periodic survey allocations use each site's hourly counts from the same survey period. If there are fewer units than candidate sites, there is no guarantee that every site will receive a unit. Commuting-hour weights apply to 08:00–10:00 and 17:00–19:00 within the configured operating hours. Only peak hours that actually fall inside the operating window are weighted; the plan's `assumptions.commute_hours` lists those effective hours, and `assumptions.commute_hours_outside_window` lists the rest. With the default 10:00–18:00 window, that means 17:00 alone is reweighted. Changing the weights does not automatically extend operating hours.
 
 For each run, the monitor shows the question, applied conditions, invoked nodes, prompts, SQL, returned rows, calculation results, errors and answer. It does not display the model's internal reasoning.
 

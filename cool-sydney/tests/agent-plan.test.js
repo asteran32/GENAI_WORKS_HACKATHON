@@ -53,5 +53,14 @@ test('recorded ten-site scenario keeps arithmetic exact and applies the actual c
   assert.equal(report.rows.find(r=>r.site_id===102).devices,6);assert.equal(report.rows.find(r=>r.site_id===106).devices,3);
   assert.deepEqual(revised.schedule,baseline.schedule);assert.equal(revised.comparison.schedule_changed,false);
   const answer=planExplanation(revised);assert.match(answer,/336,210/);assert.doesNotMatch(answer,/316,210/);assert.match(answer,/Site 102 5→6대/);assert.match(answer,/Site 106 4→3대/);assert.match(answer,/17:00–18:00/);
+  // The structured assumptions must disclose which peak hours were actually weighted.
+  // Peak hours are 08:00-10:00 and 17:00-19:00, but the window is 10:00-18:00, so only 17:00 counts.
+  assert.deepEqual(revised.assumptions.commute_hours,[17]);
+  assert.deepEqual(revised.assumptions.commute_hours_outside_window,[8,9,18]);
+  assert.ok(revised.limitations.some(l=>/reweights only the peak hours inside the 10:00–18:00 operating window \(17:00\); 08:00, 09:00, 18:00 fall outside it and are not weighted/.test(l)));
+  // Reporting only: the allocation and schedule are identical to the pre-fix behaviour.
+  assert.equal(report.total_passages,336210);assert.equal(report.total_demand_score,400410);
+  assert.equal(report.rows.find(r=>r.site_id===102).devices,6);assert.equal(report.rows.find(r=>r.site_id===106).devices,3);
+  assert.deepEqual(revised.schedule,baseline.schedule);
   assert.equal(resolveConstraints('전체 보행 조사 지점에서 평일 출퇴근 시간대의 보행량이 많은 구간 10곳을 찾아줘',[]).constraints.commute_priority,false);
 });
