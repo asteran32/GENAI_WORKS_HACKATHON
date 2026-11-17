@@ -88,15 +88,21 @@ function calculateAllocation(zones,conditions,start,end,metadata,peak=h=>(h>=7&&
     const minutes=n?Math.min(60,Math.floor((water/(n*12))*60+1e-9)):0,used=n*12*minutes/60;water=Math.max(0,water-used);
     schedule.push({hour:item.hour,active_minutes:minutes,water_l:used});
   }
+  const clock=h=>`${String(h).padStart(2,'0')}:00`;
+  const allCommuteHours=[...Array(24).keys()].filter(peak);
+  const effectiveCommuteHours=allCommuteHours.filter(h=>h>=start&&h<end);
+  const outsideCommuteHours=allCommuteHours.filter(h=>h<start||h>=end);
   const allocation=orderAllocations(zones.map(({id,name,description,site_id,proxy_site_id,devices,score,rows})=>({id,name,description,site_id,proxy_site_id,devices,operating_passages:rows.reduce((sum,r)=>sum+r.predicted_passages,0),demand_score:Math.round(score),change:previous?devices-(previous.find(p=>p.id===id)?.devices||0):null})));
   return {...metadata,method:'largest-remainder proportional allocation',constraints,operating_hours:{start_hour:start,end_hour:end},allocation,schedule:schedule.sort((a,b)=>a.hour-b.hour),
     total_operating_passages:allocation.reduce((sum,row)=>sum+row.operating_passages,0),total_demand_score:allocation.reduce((sum,row)=>sum+row.demand_score,0),
     total_devices:allocation.reduce((s,z)=>s+z.devices,0),total_water_l:schedule.reduce((s,h)=>s+h.water_l,0),full_time_water_l:fullWater,
     comparison:previous?{schedule_changed:conditions.previous_schedule?conditions.previous_schedule.length!==schedule.length||schedule.some(row=>conditions.previous_schedule.find(old=>old.hour===row.hour)?.active_minutes!==row.active_minutes):null,previous_devices:previous.reduce((sum,p)=>sum+p.devices,0),device_change:n-previous.reduce((sum,p)=>sum+p.devices,0),removed_sites:previous.filter(p=>!allocation.some(a=>a.id===p.id)).map(p=>({id:p.id,devices:0,change:-p.devices}))}:null,
-    assumptions:{water_l_per_device_hour:12,commute_weight:constraints.commute_priority?2:1,commute_hours:[...Array(24).keys()].filter(peak),schedule:'All allocated units share the hourly spray duration; highest weighted-demand hours receive water first.'},
+    assumptions:{water_l_per_device_hour:12,commute_weight:constraints.commute_priority?2:1,commute_hours:effectiveCommuteHours,commute_hours_outside_window:outsideCommuteHours,schedule:'All allocated units share the hourly spray duration; highest weighted-demand hours receive water first.'},
     limitations:[...metadata.limitations,'Demand-proportional scenario, not global optimization or measured cooling.',
       'Water access, power, overlapping devices, weather and shade are not modeled.',
       '12 L per unit-hour is an assumption. Active minutes are total spraying time within each hour, not a device control command.',
-      'Commute priority doubles demand weights only within the unchanged operating window.']};
+      constraints.commute_priority&&outsideCommuteHours.length
+        ? `Commute priority reweights only the peak hours inside the ${clock(start)}–${clock(end)} operating window (${effectiveCommuteHours.map(clock).join(', ')}); ${outsideCommuteHours.map(clock).join(', ')} fall outside it and are not weighted.`
+        : 'Commute priority doubles demand weights only within the unchanged operating window.']};
 }
 module.exports={parsePatch,resolveConstraints,allocateFog,allocateSurveyFog,memorySnapshot,ZONES};
